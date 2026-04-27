@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
+import useSWR from "swr"
 import {
   Trash2,
   Search,
@@ -16,35 +17,35 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
-import {
-  expiringItems as initialExpiringItems,
-  wasteHistory as initialWasteHistory,
-  type WasteItem,
-  type WasteHistory,
-} from "@/lib/data"
+import { type WasteItem, type WasteHistory } from "@/lib/data"
+import { fetcher, formatKRW } from "@/lib/fetcher"
 
 type SortDirection = "asc" | "desc" | null
 type SortKey = "product" | "quantity" | "reason" | "cost" | "date" | "handler" | null
 
+interface WasteResponse {
+  expiring: WasteItem[]
+  history: WasteHistory[]
+  stats: {
+    expiringCount: number
+    todayExpiringCount: number
+    weeklyCost: number
+    weeklyCostChangePct: number
+  }
+}
+
 export default function WastePage() {
+  const { data, isLoading } = useSWR<WasteResponse>("/api/waste", fetcher)
+  const expiringItems = data?.expiring ?? []
+  const wasteHistoryData = data?.history ?? []
+
   const [searchQuery, setSearchQuery] = useState("")
-  const [expiringItems] = useState<WasteItem[]>(initialExpiringItems)
-  const [wasteHistoryData] = useState<WasteHistory[]>(initialWasteHistory)
-  
-  // Sorting state
   const [sortKey, setSortKey] = useState<SortKey>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>(null)
 
-  // Animation state
   const [mounted, setMounted] = useState(false)
   useEffect(() => {
     setMounted(true)
@@ -52,14 +53,11 @@ export default function WastePage() {
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
-      if (sortDirection === "asc") {
-        setSortDirection("desc")
-      } else if (sortDirection === "desc") {
+      if (sortDirection === "asc") setSortDirection("desc")
+      else if (sortDirection === "desc") {
         setSortKey(null)
         setSortDirection(null)
-      } else {
-        setSortDirection("asc")
-      }
+      } else setSortDirection("asc")
     } else {
       setSortKey(key)
       setSortDirection("asc")
@@ -68,110 +66,66 @@ export default function WastePage() {
 
   const filteredAndSortedHistory = useMemo(() => {
     let filtered = wasteHistoryData.filter((waste) => {
-      const matchesSearch = 
-        waste.product.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        waste.reason.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        waste.handler.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        waste.id.toLowerCase().includes(searchQuery.toLowerCase())
-      return matchesSearch
+      const q = searchQuery.toLowerCase()
+      return (
+        waste.product.toLowerCase().includes(q) ||
+        waste.reason.toLowerCase().includes(q) ||
+        waste.handler.toLowerCase().includes(q) ||
+        waste.id.toLowerCase().includes(q)
+      )
     })
-
     if (sortKey && sortDirection) {
       filtered = [...filtered].sort((a, b) => {
-        let aValue: string
-        let bValue: string
-
-        switch (sortKey) {
-          case "product":
-            aValue = a.product
-            bValue = b.product
-            break
-          case "quantity":
-            aValue = a.quantity
-            bValue = b.quantity
-            break
-          case "reason":
-            aValue = a.reason
-            bValue = b.reason
-            break
-          case "cost":
-            aValue = a.cost
-            bValue = b.cost
-            break
-          case "date":
-            aValue = a.date
-            bValue = b.date
-            break
-          case "handler":
-            aValue = a.handler
-            bValue = b.handler
-            break
-          default:
-            return 0
-        }
-
-        return sortDirection === "asc"
-          ? aValue.localeCompare(bValue, "ko")
-          : bValue.localeCompare(aValue, "ko")
+        const av = (a[sortKey] ?? "") as string
+        const bv = (b[sortKey] ?? "") as string
+        return sortDirection === "asc" ? av.localeCompare(bv, "ko") : bv.localeCompare(av, "ko")
       })
     }
-
     return filtered
   }, [wasteHistoryData, searchQuery, sortKey, sortDirection])
 
   const SortIcon = ({ columnKey }: { columnKey: SortKey }) => {
-    if (sortKey !== columnKey) {
-      return <ArrowUpDown className="ml-1 h-3 w-3 opacity-50" />
-    }
-    return sortDirection === "asc" 
-      ? <ArrowUp className="ml-1 h-3 w-3" />
-      : <ArrowDown className="ml-1 h-3 w-3" />
+    if (sortKey !== columnKey) return <ArrowUpDown className="ml-1 h-3 w-3 opacity-50" />
+    return sortDirection === "asc" ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />
   }
 
-  // Calculate stats
-  const stats = useMemo(() => {
-    const expiringCount = expiringItems.length
-    const todayExpiring = expiringItems.filter(i => i.daysLeft <= 1).length
-    return { expiringCount, todayExpiring }
-  }, [expiringItems])
-
-  const wasteStats = [
-    {
-      title: "이번 주 폐기량",
-      value: "₩185,000",
-      change: "-12%",
-      changeType: "positive",
-      description: "전주 대비",
-      icon: Trash2,
-    },
-    {
-      title: "유통기한 임박",
-      value: `${stats.expiringCount}개`,
-      description: "3일 이내 만료",
-      icon: Calendar,
-      warning: true,
-    },
-    {
-      title: "폐기 예정",
-      value: `${stats.todayExpiring}개`,
-      description: "오늘 마감",
-      icon: AlertTriangle,
-      urgent: true,
-    },
-    {
-      title: "절감 목표",
-      value: "78%",
-      description: "월간 목표 달성률",
-      icon: TrendingDown,
-    },
-  ]
+  const wasteStats = data
+    ? [
+        {
+          title: "이번 주 폐기량",
+          value: formatKRW(data.stats.weeklyCost),
+          change:
+            data.stats.weeklyCostChangePct >= 0
+              ? `+${data.stats.weeklyCostChangePct}%`
+              : `${data.stats.weeklyCostChangePct}%`,
+          changeType: data.stats.weeklyCostChangePct <= 0 ? ("positive" as const) : ("negative" as const),
+          description: "전주 대비",
+          icon: Trash2,
+        },
+        {
+          title: "유통기한 임박",
+          value: `${data.stats.expiringCount}개`,
+          description: "3일 이내 만료",
+          icon: Calendar,
+          warning: true,
+        },
+        {
+          title: "폐기 예정",
+          value: `${data.stats.todayExpiringCount}개`,
+          description: "오늘 마감",
+          icon: AlertTriangle,
+          urgent: true,
+        },
+        { title: "절감 목표", value: "78%", description: "월간 목표 달성률", icon: TrendingDown },
+      ]
+    : []
 
   return (
     <div className="flex flex-col gap-8">
-      <div 
+      <div
         className={cn(
           "flex flex-col gap-4 md:flex-row md:items-center md:justify-between transition-all duration-1000",
-          mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+          mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4",
         )}
       >
         <div>
@@ -185,60 +139,61 @@ export default function WastePage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {wasteStats.map((stat, index) => (
-          <Card 
-            key={stat.title} 
-            className={cn(
-              "border card-hover transition-all duration-1000",
-              stat.urgent && "border-destructive/50",
-              stat.warning && "border-orange-500/50",
-              mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-            )}
-            style={{ transitionDelay: `${200 + index * 150}ms` }}
-          >
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {stat.title}
-              </CardTitle>
-              <stat.icon className={cn(
-                "h-5 w-5",
-                stat.urgent && "text-destructive",
-                stat.warning && "text-orange-500",
-                !stat.urgent && !stat.warning && "text-muted-foreground"
-              )} />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
-              <p className="text-sm text-muted-foreground">
-                {stat.change && (
-                  <span className={cn(
-                    "mr-1 font-medium",
-                    stat.changeType === "positive" && "text-green-600 dark:text-green-400"
-                  )}>
-                    {stat.change}
-                  </span>
+        {isLoading || !data
+          ? Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28" />)
+          : wasteStats.map((stat, index) => (
+              <Card
+                key={stat.title}
+                className={cn(
+                  "border card-hover transition-all duration-1000",
+                  stat.urgent && "border-destructive/50",
+                  stat.warning && "border-orange-500/50",
+                  mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4",
                 )}
-                {stat.description}
-              </p>
-            </CardContent>
-          </Card>
-        ))}
+                style={{ transitionDelay: `${200 + index * 150}ms` }}
+              >
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">{stat.title}</CardTitle>
+                  <stat.icon
+                    className={cn(
+                      "h-5 w-5",
+                      stat.urgent && "text-destructive",
+                      stat.warning && "text-orange-500",
+                      !stat.urgent && !stat.warning && "text-muted-foreground",
+                    )}
+                  />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stat.value}</div>
+                  <p className="text-sm text-muted-foreground">
+                    {stat.change && (
+                      <span
+                        className={cn(
+                          "mr-1 font-medium",
+                          stat.changeType === "positive" && "text-green-600 dark:text-green-400",
+                          stat.changeType === "negative" && "text-destructive",
+                        )}
+                      >
+                        {stat.change}
+                      </span>
+                    )}
+                    {stat.description}
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
       </div>
 
-      <Card 
+      <Card
         className={cn(
           "border transition-all duration-1000",
-          mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+          mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4",
         )}
         style={{ transitionDelay: "800ms" }}
       >
         <CardHeader>
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <CardTitle>유통기한 임박 상품</CardTitle>
-              <CardDescription>조치가 필요한 상품 목록입니다</CardDescription>
-            </div>
-          </div>
+          <CardTitle>유통기한 임박 상품</CardTitle>
+          <CardDescription>조치가 필요한 상품 목록입니다</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
@@ -248,7 +203,7 @@ export default function WastePage() {
                 className={cn(
                   "rounded-lg border p-4 transition-all duration-600 hover:bg-muted/50",
                   item.daysLeft <= 1 && "border-destructive/50 bg-destructive/5",
-                  mounted ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4"
+                  mounted ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4",
                 )}
                 style={{ transitionDelay: `${1000 + index * 100}ms` }}
               >
@@ -262,7 +217,7 @@ export default function WastePage() {
                     className={cn(
                       item.daysLeft <= 1 && "bg-destructive/10 text-destructive",
                       item.daysLeft === 2 && "bg-orange-500/10 text-orange-600 dark:text-orange-400",
-                      item.daysLeft >= 3 && "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                      item.daysLeft >= 3 && "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400",
                     )}
                   >
                     D-{item.daysLeft}
@@ -272,19 +227,17 @@ export default function WastePage() {
                   <span className="text-muted-foreground">예상 손실</span>
                   <span className="font-medium text-destructive">{item.cost}</span>
                 </div>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  만료일: {item.expiryDate}
-                </p>
+                <p className="mt-2 text-xs text-muted-foreground">만료일: {item.expiryDate}</p>
               </div>
             ))}
           </div>
         </CardContent>
       </Card>
 
-      <Card 
+      <Card
         className={cn(
           "border transition-all duration-1000",
-          mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+          mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4",
         )}
         style={{ transitionDelay: "1200ms" }}
       >
@@ -368,33 +321,39 @@ export default function WastePage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredAndSortedHistory.map((waste, index) => (
-                  <TableRow 
-                    key={waste.id}
-                    className={cn(
-                      "transition-all duration-600",
-                      mounted ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4"
-                    )}
-                    style={{ transitionDelay: `${1400 + index * 60}ms` }}
-                  >
-                    <TableCell className="font-mono text-sm">{waste.id}</TableCell>
-                    <TableCell className="font-medium">{waste.product}</TableCell>
-                    <TableCell>{waste.quantity}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{waste.reason}</Badge>
-                    </TableCell>
-                    <TableCell className="text-destructive font-medium">{waste.cost}</TableCell>
-                    <TableCell className="text-muted-foreground">{waste.date}</TableCell>
-                    <TableCell className="text-muted-foreground">{waste.handler}</TableCell>
-                  </TableRow>
-                ))}
+                {isLoading
+                  ? Array.from({ length: 6 }).map((_, i) => (
+                      <TableRow key={i}>
+                        <TableCell colSpan={7}>
+                          <Skeleton className="h-6 w-full" />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  : filteredAndSortedHistory.map((waste, index) => (
+                      <TableRow
+                        key={waste.id}
+                        className={cn(
+                          "transition-all duration-600",
+                          mounted ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4",
+                        )}
+                        style={{ transitionDelay: `${1400 + index * 60}ms` }}
+                      >
+                        <TableCell className="font-mono text-sm">{waste.id}</TableCell>
+                        <TableCell className="font-medium">{waste.product}</TableCell>
+                        <TableCell>{waste.quantity}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{waste.reason}</Badge>
+                        </TableCell>
+                        <TableCell className="text-destructive font-medium">{waste.cost}</TableCell>
+                        <TableCell className="text-muted-foreground">{waste.date}</TableCell>
+                        <TableCell className="text-muted-foreground">{waste.handler}</TableCell>
+                      </TableRow>
+                    ))}
               </TableBody>
             </Table>
           </div>
-          
-          <p className="mt-4 text-sm text-muted-foreground">
-            총 {filteredAndSortedHistory.length}건
-          </p>
+
+          <p className="mt-4 text-sm text-muted-foreground">총 {filteredAndSortedHistory.length}건</p>
         </CardContent>
       </Card>
     </div>
