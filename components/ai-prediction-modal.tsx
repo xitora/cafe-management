@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { Checkbox } from "@/components/ui/checkbox"
+import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 
 interface AIPredictionModalProps {
@@ -20,18 +20,18 @@ interface AIPredictionModalProps {
 }
 
 type Step = "input" | "confirm" | "analyzing" | "complete"
+type Variant = "v1" | "v2"
 
 const weatherOptions = ["비", "눈", "우박", "안개"]
 const eventOptions = ["지역 축제", "콘서트", "전시회", "스포츠 경기"]
-const disasterOptions = ["태풍", "폭설", "폭우", "폭염"]
 
 export function AIPredictionModal({ open, onOpenChange }: AIPredictionModalProps) {
   const [step, setStep] = useState<Step>("input")
+  const [variant, setVariant] = useState<Variant>("v1")
   const [progress, setProgress] = useState(0)
   const [selectedWeather, setSelectedWeather] = useState<string[]>([])
   const [selectedEvents, setSelectedEvents] = useState<string[]>([])
-  const [selectedDisasters, setSelectedDisasters] = useState<string[]>([])
-  const [isHoliday, setIsHoliday] = useState(false)
+  const [freeText, setFreeText] = useState("")
   const [analysisStatus, setAnalysisStatus] = useState({
     preprocessing: false,
     patternAnalysis: false,
@@ -106,8 +106,7 @@ export function AIPredictionModal({ open, onOpenChange }: AIPredictionModalProps
       setProgress(0)
       setSelectedWeather([])
       setSelectedEvents([])
-      setSelectedDisasters([])
-      setIsHoliday(false)
+      setFreeText("")
       setAnalysisStatus({
         preprocessing: false,
         patternAnalysis: false,
@@ -125,9 +124,13 @@ export function AIPredictionModal({ open, onOpenChange }: AIPredictionModalProps
     }
   }, [open])
 
+  const v1HasInput = selectedWeather.length > 0 || selectedEvents.length > 0
+  const v2HasInput = freeText.trim().length > 0
+  const canProceed = variant === "v1" ? true : v2HasInput || true
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md overflow-hidden">
+      <DialogContent className="sm:max-w-md overflow-hidden max-h-[90vh] overflow-y-auto">
         <DialogHeader className="animate-fade-in-up">
           <DialogTitle className="text-xl">AI 예측 모델 실행</DialogTitle>
           <DialogDescription>
@@ -146,69 +149,92 @@ export function AIPredictionModal({ open, onOpenChange }: AIPredictionModalProps
             </div>
 
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">외부 변수 입력</label>
-              
-              <div className="rounded-lg border p-4">
-                <p className="mb-3 text-sm font-medium">날씨 변화</p>
-                <div className="flex flex-wrap gap-2">
-                  {weatherOptions.map((option) => (
-                    <Button
-                      key={option}
-                      variant={selectedWeather.includes(option) ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => toggleOption(option, selectedWeather, setSelectedWeather)}
-                    >
-                      {option}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-lg border p-4">
-                <p className="mb-3 text-sm font-medium">주변 행사</p>
-                <div className="flex flex-wrap gap-2">
-                  {eventOptions.map((option) => (
-                    <Button
-                      key={option}
-                      variant={selectedEvents.includes(option) ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => toggleOption(option, selectedEvents, setSelectedEvents)}
-                    >
-                      {option}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 rounded-lg border p-4">
-                <Checkbox
-                  id="holiday"
-                  checked={isHoliday}
-                  onCheckedChange={(checked) => setIsHoliday(checked as boolean)}
-                />
-                <label htmlFor="holiday" className="text-sm font-medium cursor-pointer">
-                  공휴일 / 휴일
-                </label>
-              </div>
-
-              <div className="rounded-lg border p-4">
-                <p className="mb-3 text-sm font-medium">천재지변</p>
-                <div className="flex flex-wrap gap-2">
-                  {disasterOptions.map((option) => (
-                    <Button
-                      key={option}
-                      variant={selectedDisasters.includes(option) ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => toggleOption(option, selectedDisasters, setSelectedDisasters)}
-                    >
-                      {option}
-                    </Button>
-                  ))}
-                </div>
+              <label className="text-sm font-medium">외부 변수 입력 방식</label>
+              <div className="grid grid-cols-2 gap-2 rounded-lg border p-1">
+                <button
+                  type="button"
+                  onClick={() => setVariant("v1")}
+                  className={cn(
+                    "flex flex-col items-start gap-0.5 rounded-md px-3 py-2 text-left text-sm transition",
+                    variant === "v1"
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:bg-muted"
+                  )}
+                >
+                  <span className="font-semibold">1안 · 선택형</span>
+                  <span className="text-xs opacity-80">날씨 · 주변 행사</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVariant("v2")}
+                  className={cn(
+                    "flex flex-col items-start gap-0.5 rounded-md px-3 py-2 text-left text-sm transition",
+                    variant === "v2"
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:bg-muted"
+                  )}
+                >
+                  <span className="font-semibold">2안 · 서술형</span>
+                  <span className="text-xs opacity-80">자유 입력</span>
+                </button>
               </div>
             </div>
 
-            <Button onClick={handleNextStep} className="w-full">
+            {variant === "v1" ? (
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium">외부 변수 선택</label>
+
+                <div className="rounded-lg border p-4">
+                  <p className="mb-3 text-sm font-medium">날씨 변화</p>
+                  <div className="flex flex-wrap gap-2">
+                    {weatherOptions.map((option) => (
+                      <Button
+                        key={option}
+                        variant={selectedWeather.includes(option) ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => toggleOption(option, selectedWeather, setSelectedWeather)}
+                      >
+                        {option}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-lg border p-4">
+                  <p className="mb-3 text-sm font-medium">주변 행사</p>
+                  <div className="flex flex-wrap gap-2">
+                    {eventOptions.map((option) => (
+                      <Button
+                        key={option}
+                        variant={selectedEvents.includes(option) ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => toggleOption(option, selectedEvents, setSelectedEvents)}
+                      >
+                        {option}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <label htmlFor="free-text" className="text-sm font-medium">
+                  외부 변수 서술 입력
+                </label>
+                <Textarea
+                  id="free-text"
+                  value={freeText}
+                  onChange={(e) => setFreeText(e.target.value)}
+                  placeholder="예: 인근 대학 축제로 평소 대비 유동 인구 증가 예상, 신메뉴 프로모션 진행 중 등"
+                  className="min-h-32 resize-none"
+                />
+                <p className="text-xs text-muted-foreground">
+                  예측에 영향을 줄 수 있는 외부 요인을 자유롭게 작성하세요.
+                </p>
+              </div>
+            )}
+
+            <Button onClick={handleNextStep} className="w-full" disabled={!canProceed}>
               다음 단계
             </Button>
           </div>
@@ -224,32 +250,36 @@ export function AIPredictionModal({ open, onOpenChange }: AIPredictionModalProps
                   <span className="font-medium">{formattedDate}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">외부 변수:</span>
+                  <span className="text-muted-foreground">입력 방식:</span>
                   <span className="font-medium">
-                    {[...selectedWeather, ...selectedEvents, ...selectedDisasters].length + (isHoliday ? 1 : 0)}개 카테고리
+                    {variant === "v1" ? "1안 · 선택형" : "2안 · 서술형"}
                   </span>
                 </div>
-                {selectedWeather.length > 0 && (
+
+                {variant === "v1" ? (
+                  <>
+                    {selectedWeather.length > 0 && (
+                      <div className="flex flex-col gap-1 pl-2">
+                        <span className="text-muted-foreground">• 날씨 변화:</span>
+                        <span className="pl-2">{selectedWeather.join(", ")}</span>
+                      </div>
+                    )}
+                    {selectedEvents.length > 0 && (
+                      <div className="flex flex-col gap-1 pl-2">
+                        <span className="text-muted-foreground">• 주변 행사:</span>
+                        <span className="pl-2">{selectedEvents.join(", ")}</span>
+                      </div>
+                    )}
+                    {!v1HasInput && (
+                      <p className="pl-2 text-muted-foreground">선택된 외부 변수 없음</p>
+                    )}
+                  </>
+                ) : (
                   <div className="flex flex-col gap-1 pl-2">
-                    <span className="text-muted-foreground">• 날씨 변화:</span>
-                    <span className="pl-2">{selectedWeather.join(", ")}</span>
-                  </div>
-                )}
-                {selectedEvents.length > 0 && (
-                  <div className="flex flex-col gap-1 pl-2">
-                    <span className="text-muted-foreground">• 주변 행사:</span>
-                    <span className="pl-2">{selectedEvents.join(", ")}</span>
-                  </div>
-                )}
-                {isHoliday && (
-                  <div className="pl-2">
-                    <span className="text-muted-foreground">• 공휴일/휴일</span>
-                  </div>
-                )}
-                {selectedDisasters.length > 0 && (
-                  <div className="flex flex-col gap-1 pl-2">
-                    <span className="text-muted-foreground">• 천재지변:</span>
-                    <span className="pl-2">{selectedDisasters.join(", ")}</span>
+                    <span className="text-muted-foreground">• 서술 내용:</span>
+                    <span className="whitespace-pre-wrap rounded-md bg-background p-2 text-foreground">
+                      {freeText.trim() || "(입력 없음)"}
+                    </span>
                   </div>
                 )}
               </div>
