@@ -14,6 +14,9 @@ import {
   BarChart3,
   Trash2,
   ShoppingCart,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -72,6 +75,43 @@ export default function InventoryPage() {
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // 재고 목록 정렬 — 폐기 내역과 동일한 asc/desc/none 토글 패턴
+  type InvSortKey = "id" | "product" | "category" | "currentStock" | "stockPercent" | "unitPrice" | "lastUpdated"
+  type SortDir = "asc" | "desc" | null
+  const [invSortKey, setInvSortKey] = useState<InvSortKey | null>("stockPercent")
+  const [invSortDir, setInvSortDir] = useState<SortDir>("asc")
+  const handleInvSort = (key: InvSortKey) => {
+    if (invSortKey === key) {
+      if (invSortDir === "asc") setInvSortDir("desc")
+      else if (invSortDir === "desc") {
+        setInvSortKey(null)
+        setInvSortDir(null)
+      } else setInvSortDir("asc")
+    } else {
+      setInvSortKey(key)
+      setInvSortDir("asc")
+    }
+  }
+  const InvSortIcon = ({ k }: { k: InvSortKey }) => {
+    if (invSortKey !== k) return <ArrowUpDown className="ml-1 h-3 w-3 opacity-50" />
+    return invSortDir === "asc" ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />
+  }
+
+  // 발주 필요 품목 정렬 — 카드 그리드용 동일 토글 패턴
+  type OrdSortKey = "urgency" | "product" | "currentStock" | "dailyUsage" | "recommendedQty"
+  const [ordSortKey, setOrdSortKey] = useState<OrdSortKey>("urgency")
+  const [ordSortDir, setOrdSortDir] = useState<SortDir>("asc")
+  const handleOrdSort = (key: OrdSortKey) => {
+    if (ordSortKey === key) {
+      if (ordSortDir === "asc") setOrdSortDir("desc")
+      else if (ordSortDir === "desc") setOrdSortDir("asc")
+      else setOrdSortDir("asc")
+    } else {
+      setOrdSortKey(key)
+      setOrdSortDir("asc")
+    }
+  }
+
   const [mounted, setMounted] = useState(false)
   useEffect(() => {
     setMounted(true)
@@ -97,19 +137,61 @@ export default function InventoryPage() {
     dailyUsage: 0,
   })
 
-  // 항상 수량(재고 비율) 적은 순 정렬 — 검색/카테고리 필터 후 그대로 유지
+  // 검색/카테고리 필터 후 사용자 정렬 적용. 정렬 미설정 시 기본은 재고비율 오름차순
   const filteredItems = useMemo(() => {
-    return items
-      .filter((item) => {
-        const q = searchQuery.toLowerCase()
-        const matchesSearch =
-          item.product.toLowerCase().includes(q) || item.category.toLowerCase().includes(q)
-        const matchesCategory = selectedCategory === "전체" || item.category === selectedCategory
-        return matchesSearch && matchesCategory
-      })
-      .slice()
-      .sort((a, b) => getStockLevelPercent(a) - getStockLevelPercent(b))
-  }, [items, searchQuery, selectedCategory])
+    const filtered = items.filter((item) => {
+      const q = searchQuery.toLowerCase()
+      const matchesSearch =
+        item.product.toLowerCase().includes(q) || item.category.toLowerCase().includes(q)
+      const matchesCategory = selectedCategory === "전체" || item.category === selectedCategory
+      return matchesSearch && matchesCategory
+    })
+
+    if (!invSortKey || !invSortDir) {
+      return filtered.slice().sort((a, b) => getStockLevelPercent(a) - getStockLevelPercent(b))
+    }
+
+    return filtered.slice().sort((a, b) => {
+      let av: string | number
+      let bv: string | number
+      if (invSortKey === "stockPercent") {
+        av = getStockLevelPercent(a)
+        bv = getStockLevelPercent(b)
+      } else {
+        av = a[invSortKey] as string | number
+        bv = b[invSortKey] as string | number
+      }
+      if (typeof av === "number" && typeof bv === "number") {
+        return invSortDir === "asc" ? av - bv : bv - av
+      }
+      return invSortDir === "asc"
+        ? String(av).localeCompare(String(bv), "ko")
+        : String(bv).localeCompare(String(av), "ko")
+    })
+  }, [items, searchQuery, selectedCategory, invSortKey, invSortDir])
+
+  // 발주 필요 품목 정렬된 결과
+  const sortedRecommended = useMemo(() => {
+    const urgencyOrder: Record<RecommendedOrder["urgency"], number> = { high: 0, medium: 1, low: 2 }
+    return recommended.slice().sort((a, b) => {
+      let av: string | number
+      let bv: string | number
+      if (ordSortKey === "urgency") {
+        av = urgencyOrder[a.urgency]
+        bv = urgencyOrder[b.urgency]
+      } else {
+        av = a[ordSortKey] as string | number
+        bv = b[ordSortKey] as string | number
+      }
+      const dir = ordSortDir ?? "asc"
+      if (typeof av === "number" && typeof bv === "number") {
+        return dir === "asc" ? av - bv : bv - av
+      }
+      return dir === "asc"
+        ? String(av).localeCompare(String(bv), "ko")
+        : String(bv).localeCompare(String(av), "ko")
+    })
+  }, [recommended, ordSortKey, ordSortDir])
 
   const handleEditClick = (item: InventoryItem) => {
     setSelectedItem(item)
@@ -291,13 +373,47 @@ export default function InventoryPage() {
         style={{ transitionDelay: "700ms" }}
       >
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <CardTitle className="flex items-center gap-2">
                 <ShoppingCart className="h-5 w-5" />
                 발주 필요 품목
               </CardTitle>
               <CardDescription>일평균 소비량과 현재 재고 기준 권장 발주 목록</CardDescription>
+            </div>
+            <div className="flex flex-wrap items-center gap-1">
+              {(
+                [
+                  { k: "urgency", label: "긴급도" },
+                  { k: "product", label: "상품명" },
+                  { k: "currentStock", label: "재고" },
+                  { k: "dailyUsage", label: "일평균" },
+                  { k: "recommendedQty", label: "권장량" },
+                ] as { k: OrdSortKey; label: string }[]
+              ).map(({ k, label }) => {
+                const active = ordSortKey === k
+                return (
+                  <Button
+                    key={k}
+                    type="button"
+                    size="sm"
+                    variant={active ? "secondary" : "ghost"}
+                    className="h-8 px-2 text-xs"
+                    onClick={() => handleOrdSort(k)}
+                  >
+                    {label}
+                    {active ? (
+                      ordSortDir === "asc" ? (
+                        <ArrowUp className="ml-1 h-3 w-3" />
+                      ) : (
+                        <ArrowDown className="ml-1 h-3 w-3" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="ml-1 h-3 w-3 opacity-50" />
+                    )}
+                  </Button>
+                )
+              })}
             </div>
           </div>
         </CardHeader>
@@ -312,7 +428,7 @@ export default function InventoryPage() {
             <p className="text-sm text-muted-foreground">현재 발주가 필요한 품목이 없습니다.</p>
           ) : (
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-              {recommended.map((rec, i) => {
+              {sortedRecommended.map((rec, i) => {
                 const meta = urgencyMeta[rec.urgency]
                 return (
                   <div
@@ -389,13 +505,69 @@ export default function InventoryPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-24">품목코드</TableHead>
-                  <TableHead>품목명</TableHead>
-                  <TableHead>카테고리</TableHead>
-                  <TableHead>현재 재고</TableHead>
-                  <TableHead>재고 상태</TableHead>
-                  <TableHead>단가</TableHead>
-                  <TableHead>최종 업데이트</TableHead>
+                  <TableHead className="w-24">
+                    <Button
+                      variant="ghost"
+                      className="h-auto p-0 font-medium hover:bg-transparent"
+                      onClick={() => handleInvSort("id")}
+                    >
+                      품목코드 <InvSortIcon k="id" />
+                    </Button>
+                  </TableHead>
+                  <TableHead>
+                    <Button
+                      variant="ghost"
+                      className="h-auto p-0 font-medium hover:bg-transparent"
+                      onClick={() => handleInvSort("product")}
+                    >
+                      품목명 <InvSortIcon k="product" />
+                    </Button>
+                  </TableHead>
+                  <TableHead>
+                    <Button
+                      variant="ghost"
+                      className="h-auto p-0 font-medium hover:bg-transparent"
+                      onClick={() => handleInvSort("category")}
+                    >
+                      카테고리 <InvSortIcon k="category" />
+                    </Button>
+                  </TableHead>
+                  <TableHead>
+                    <Button
+                      variant="ghost"
+                      className="h-auto p-0 font-medium hover:bg-transparent"
+                      onClick={() => handleInvSort("currentStock")}
+                    >
+                      현재 재고 <InvSortIcon k="currentStock" />
+                    </Button>
+                  </TableHead>
+                  <TableHead>
+                    <Button
+                      variant="ghost"
+                      className="h-auto p-0 font-medium hover:bg-transparent"
+                      onClick={() => handleInvSort("stockPercent")}
+                    >
+                      재고 상태 <InvSortIcon k="stockPercent" />
+                    </Button>
+                  </TableHead>
+                  <TableHead>
+                    <Button
+                      variant="ghost"
+                      className="h-auto p-0 font-medium hover:bg-transparent"
+                      onClick={() => handleInvSort("unitPrice")}
+                    >
+                      단가 <InvSortIcon k="unitPrice" />
+                    </Button>
+                  </TableHead>
+                  <TableHead>
+                    <Button
+                      variant="ghost"
+                      className="h-auto p-0 font-medium hover:bg-transparent"
+                      onClick={() => handleInvSort("lastUpdated")}
+                    >
+                      최종 업데이트 <InvSortIcon k="lastUpdated" />
+                    </Button>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
