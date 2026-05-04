@@ -134,7 +134,7 @@ function seedInventory(today: Date): InventoryItem[] {
     { id: "INV-027", category: "차류", product: "히비스커스 티", currentStock: 40, unit: "개", minStock: 20, maxStock: 100, unitPrice: 200, dailyUsage: 3 },
     { id: "INV-028", category: "과일/채소", product: "레몬", currentStock: 20, unit: "개", minStock: 15, maxStock: 50, unitPrice: 500, dailyUsage: 8 },
     { id: "INV-029", category: "과일/채소", product: "라임", currentStock: 10, unit: "개", minStock: 8, maxStock: 30, unitPrice: 600, dailyUsage: 3 },
-    { id: "INV-030", category: "과일/채소", product: "딸기 (냉동)", currentStock: 3, unit: "kg", minStock: 2, maxStock: 8, unitPrice: 15000, dailyUsage: 0.5 },
+    { id: "INV-030", category: "과��/채소", product: "딸기 (냉동)", currentStock: 3, unit: "kg", minStock: 2, maxStock: 8, unitPrice: 15000, dailyUsage: 0.5 },
     { id: "INV-031", category: "과일/채소", product: "블루베리 (냉동)", currentStock: 2, unit: "kg", minStock: 1.5, maxStock: 6, unitPrice: 18000, dailyUsage: 0.3 },
     { id: "INV-032", category: "과일/채소", product: "망고 (냉동)", currentStock: 2.5, unit: "kg", minStock: 2, maxStock: 8, unitPrice: 20000, dailyUsage: 0.4 },
     { id: "INV-033", category: "과일/채소", product: "바나나", currentStock: 15, unit: "개", minStock: 10, maxStock: 40, unitPrice: 300, dailyUsage: 6 },
@@ -283,17 +283,25 @@ function seedSales(today: Date): SalesTransaction[] {
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
     const weatherIdx = Math.floor(rand() * weathers.length)
     const weather = weathers[weatherIdx]
-    const tempC = Math.round(15 + rand() * 18 - (weather === "비" ? 4 : 0))
+    // 점진적 기온 상승 (시즌 추세) — 90일 전엔 12℃, 오늘엔 24℃ 부근
+    const seasonTemp = 12 + ((89 - d) / 89) * 12
+    const tempC = Math.round(seasonTemp + (rand() * 6 - 3) - (weather === "비" ? 4 : 0))
+    // 월간 흐름 가시성을 위한 점진적 매출 추세 (90일 전 대비 +35%)
+    const trendFactor = 1 + ((89 - d) / 89) * 0.35
+    // 월별 캠페인성 펄스 (월초/월중에 작은 마케팅 부스트)
+    const dayOfMonth = new Date(date).getDate()
+    const campaignBoost = dayOfMonth <= 3 ? 1.08 : dayOfMonth >= 14 && dayOfMonth <= 16 ? 1.05 : 1
     for (const m of menus) {
-      // weekend boost, weather effect for iced drinks, slight noise
       let qty = m.baseQty
       if (isWeekend) qty *= 1.35
       if (m.menu.includes("아이스") || m.menu === "콜드브루" || m.menu === "레몬에이드") {
-        qty *= tempC > 22 ? 1.25 : tempC < 10 ? 0.7 : 1
+        qty *= tempC > 22 ? 1.3 : tempC < 10 ? 0.65 : 1
       }
-      if (m.menu.includes("라떼") && tempC < 12) qty *= 1.15
+      if (m.menu.includes("라떼") && tempC < 12) qty *= 1.18
       if (weather === "비") qty *= 0.92
-      qty = Math.max(0, Math.round(qty * (0.8 + rand() * 0.4)))
+      if (weather === "눈") qty *= 0.85
+      qty *= trendFactor * campaignBoost
+      qty = Math.max(0, Math.round(qty * (0.85 + rand() * 0.3)))
       idx++
       result.push({
         id: `TX-${String(idx).padStart(5, "0")}`,

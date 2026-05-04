@@ -23,8 +23,20 @@ import { Progress } from "@/components/ui/progress"
 import { AIPredictionModal } from "@/components/ai-prediction-modal"
 import { cn } from "@/lib/utils"
 import { fetcher } from "@/lib/fetcher"
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
-import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
+import {
+  Line,
+  LineChart,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  ReferenceLine,
+} from "recharts"
+import {
+  ChartConfig,
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart"
 
 interface AccuracyResponse {
   stats: {
@@ -33,7 +45,13 @@ interface AccuracyResponse {
     stock: number
     runs: number
   }
-  monthlyAccuracy: Array<{ week: string; accuracy: number }>
+  weeklyAccuracy: Array<{
+    date: string
+    label: string
+    accuracy: number
+    isToday: boolean
+  }>
+  todayLabel: string
   categoryAccuracy: Array<{ name: string; accuracy: number; predictions: number }>
   history: Array<{
     id: number
@@ -90,7 +108,12 @@ export default function AccuracyPage() {
           description: "최근 30일 평균",
           icon: BarChart3,
         },
-        { title: "예측 실행 횟수", value: `${data.stats.runs}회`, description: "이번 달", icon: Sparkles },
+        {
+          title: "예측 실행 횟수",
+          value: `${data.stats.runs}회`,
+          description: "이번 달",
+          icon: Sparkles,
+        },
       ]
     : []
 
@@ -131,7 +154,9 @@ export default function AccuracyPage() {
                 style={{ transitionDelay: `${200 + index * 150}ms` }}
               >
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">{stat.title}</CardTitle>
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    {stat.title}
+                  </CardTitle>
                   <stat.icon className="h-5 w-5 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
@@ -151,40 +176,74 @@ export default function AccuracyPage() {
           style={{ transitionDelay: "800ms" }}
         >
           <CardHeader>
-            <CardTitle>월간 정확도 추이</CardTitle>
-            <CardDescription>주간 예측 정확도 변화</CardDescription>
+            <CardTitle>주간 정확도 추이</CardTitle>
+            <CardDescription>최근 7일간 일별 예측 정확도</CardDescription>
           </CardHeader>
           <CardContent>
             {data ? (
               <ChartContainer config={chartConfig} className="h-72 w-full">
-                <AreaChart accessibilityLayer data={data.monthlyAccuracy} margin={{ left: 0, right: 0, top: 10, bottom: 0 }}>
+                <LineChart
+                  accessibilityLayer
+                  data={data.weeklyAccuracy}
+                  margin={{ left: 0, right: 16, top: 12, bottom: 0 }}
+                >
                   <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                  <XAxis dataKey="week" tickLine={false} axisLine={false} tickMargin={8} fontSize={12} />
+                  <XAxis
+                    dataKey="label"
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={8}
+                    fontSize={12}
+                  />
                   <YAxis
                     tickLine={false}
                     axisLine={false}
                     tickMargin={8}
                     fontSize={12}
-                    width={40}
+                    width={44}
                     domain={[60, 100]}
-                    tickFormatter={(value) => `${value}%`}
+                    tickFormatter={(v) => `${v}%`}
                   />
                   <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" />} />
-                  <defs>
-                    <linearGradient id="fillAccuracy" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="var(--color-accuracy)" stopOpacity={0.8} />
-                      <stop offset="95%" stopColor="var(--color-accuracy)" stopOpacity={0.1} />
-                    </linearGradient>
-                  </defs>
-                  <Area
-                    dataKey="accuracy"
-                    type="monotone"
-                    fill="url(#fillAccuracy)"
-                    fillOpacity={0.4}
-                    stroke="var(--color-accuracy)"
-                    strokeWidth={2}
+                  <ReferenceLine
+                    x={data.todayLabel}
+                    stroke="var(--primary)"
+                    strokeDasharray="4 4"
+                    strokeWidth={1.5}
+                    label={{
+                      value: "오늘",
+                      position: "top",
+                      fill: "var(--primary)",
+                      fontSize: 11,
+                      fontWeight: 600,
+                    }}
                   />
-                </AreaChart>
+                  <Line
+                    dataKey="accuracy"
+                    type="linear"
+                    stroke="var(--color-accuracy)"
+                    strokeWidth={2.5}
+                    dot={(props) => {
+                      const { cx, cy, payload, key } = props as {
+                        cx: number
+                        cy: number
+                        payload: { isToday: boolean }
+                        key: string
+                      }
+                      return (
+                        <circle
+                          key={key}
+                          cx={cx}
+                          cy={cy}
+                          r={payload.isToday ? 6 : 3.5}
+                          fill={payload.isToday ? "var(--primary)" : "var(--color-accuracy)"}
+                          stroke="var(--background)"
+                          strokeWidth={payload.isToday ? 2 : 1}
+                        />
+                      )
+                    }}
+                  />
+                </LineChart>
               </ChartContainer>
             ) : (
               <Skeleton className="h-72 w-full" />
@@ -325,8 +384,12 @@ export default function AccuracyPage() {
                     {prediction.status === "accurate" && (
                       <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
                     )}
-                    {prediction.status === "warning" && <AlertCircle className="h-5 w-5 text-orange-500" />}
-                    {prediction.status === "inaccurate" && <XCircle className="h-5 w-5 text-destructive" />}
+                    {prediction.status === "warning" && (
+                      <AlertCircle className="h-5 w-5 text-orange-500" />
+                    )}
+                    {prediction.status === "inaccurate" && (
+                      <XCircle className="h-5 w-5 text-destructive" />
+                    )}
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
+import Link from "next/link"
 import useSWR from "swr"
 import {
   Package,
@@ -10,12 +11,9 @@ import {
   TrendingDown,
   AlertTriangle,
   Box,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
-  Download,
   BarChart3,
   Trash2,
+  ShoppingCart,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -42,19 +40,29 @@ import {
   stockStatusConfig,
   formatCurrency,
   type InventoryItem,
+  type RecommendedOrder,
 } from "@/lib/data"
 import { fetcher } from "@/lib/fetcher"
-
-type SortDirection = "asc" | "desc" | null
-type SortKey = "product" | "category" | "stockPercent" | "lastUpdated" | null
 
 interface InventoryResponse {
   items: InventoryItem[]
 }
 
+interface OrdersResponse {
+  recommended: RecommendedOrder[]
+}
+
+const urgencyMeta: Record<RecommendedOrder["urgency"], { label: string; tone: string }> = {
+  high: { label: "긴급", tone: "bg-destructive/10 text-destructive border-destructive/30" },
+  medium: { label: "주의", tone: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/30" },
+  low: { label: "여유", tone: "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/30" },
+}
+
 export default function InventoryPage() {
   const { data, isLoading, mutate } = useSWR<InventoryResponse>("/api/inventory", fetcher)
+  const { data: ordersData } = useSWR<OrdersResponse>("/api/orders", fetcher)
   const items = data?.items ?? []
+  const recommended = ordersData?.recommended ?? []
 
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("전체")
@@ -63,9 +71,6 @@ export default function InventoryPage() {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-
-  const [sortKey, setSortKey] = useState<SortKey>(null)
-  const [sortDirection, setSortDirection] = useState<SortDirection>(null)
 
   const [mounted, setMounted] = useState(false)
   useEffect(() => {
@@ -92,64 +97,19 @@ export default function InventoryPage() {
     dailyUsage: 0,
   })
 
-  const handleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      if (sortDirection === "asc") setSortDirection("desc")
-      else if (sortDirection === "desc") {
-        setSortKey(null)
-        setSortDirection(null)
-      } else setSortDirection("asc")
-    } else {
-      setSortKey(key)
-      setSortDirection("asc")
-    }
-  }
-
-  const filteredAndSortedItems = useMemo(() => {
-    let filtered = items.filter((item) => {
-      const matchesSearch =
-        item.product.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.category.toLowerCase().includes(searchQuery.toLowerCase())
-      const matchesCategory = selectedCategory === "전체" || item.category === selectedCategory
-      return matchesSearch && matchesCategory
-    })
-
-    if (sortKey && sortDirection) {
-      filtered = [...filtered].sort((a, b) => {
-        let aValue: string | number
-        let bValue: string | number
-        switch (sortKey) {
-          case "product":
-            aValue = a.product
-            bValue = b.product
-            break
-          case "category":
-            aValue = a.category
-            bValue = b.category
-            break
-          case "stockPercent":
-            aValue = getStockLevelPercent(a)
-            bValue = getStockLevelPercent(b)
-            break
-          case "lastUpdated":
-            aValue = a.lastUpdated
-            bValue = b.lastUpdated
-            break
-          default:
-            return 0
-        }
-        if (typeof aValue === "string" && typeof bValue === "string") {
-          return sortDirection === "asc" ? aValue.localeCompare(bValue, "ko") : bValue.localeCompare(aValue, "ko")
-        }
-        if (typeof aValue === "number" && typeof bValue === "number") {
-          return sortDirection === "asc" ? aValue - bValue : bValue - aValue
-        }
-        return 0
+  // 항상 수량(재고 비율) 적은 순 정렬 — 검색/카테고리 필터 후 그대로 유지
+  const filteredItems = useMemo(() => {
+    return items
+      .filter((item) => {
+        const q = searchQuery.toLowerCase()
+        const matchesSearch =
+          item.product.toLowerCase().includes(q) || item.category.toLowerCase().includes(q)
+        const matchesCategory = selectedCategory === "전체" || item.category === selectedCategory
+        return matchesSearch && matchesCategory
       })
-    }
-
-    return filtered
-  }, [items, searchQuery, selectedCategory, sortKey, sortDirection])
+      .slice()
+      .sort((a, b) => getStockLevelPercent(a) - getStockLevelPercent(b))
+  }, [items, searchQuery, selectedCategory])
 
   const handleEditClick = (item: InventoryItem) => {
     setSelectedItem(item)
@@ -221,11 +181,6 @@ export default function InventoryPage() {
     }
   }
 
-  const SortIcon = ({ columnKey }: { columnKey: SortKey }) => {
-    if (sortKey !== columnKey) return <ArrowUpDown className="ml-1 h-3 w-3 opacity-50" />
-    return sortDirection === "asc" ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />
-  }
-
   const stats = useMemo(() => {
     const lowStock = items.filter((i) => getStockStatus(i) === "low").length
     const highStock = items.filter((i) => getStockStatus(i) === "high").length
@@ -261,18 +216,21 @@ export default function InventoryPage() {
   return (
     <div className="flex flex-col gap-8">
       <div
-        className={`flex flex-col gap-4 md:flex-row md:items-center md:justify-between transition-all duration-1000 ${
-          mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-        }`}
+        className={cn(
+          "flex flex-col gap-4 md:flex-row md:items-center md:justify-between transition-all duration-1000",
+          mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4",
+        )}
       >
         <div>
           <h1 className="text-2xl font-bold tracking-tight md:text-3xl">재고 현황</h1>
           <p className="text-muted-foreground">실시간 재고 현황을 확인하고 관리합니다</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
-            <Download className="mr-2 h-4 w-4" />
-            내보내기
+          <Button variant="outline" asChild>
+            <Link href="/waste">
+              <Trash2 className="mr-2 h-4 w-4" />
+              폐기 관리
+            </Link>
           </Button>
           <Button onClick={() => setIsAddOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
@@ -324,18 +282,86 @@ export default function InventoryPage() {
         ))}
       </div>
 
+      {/* 발주 필요 품목 — 기존 /order 페이지의 핵심 기능을 이곳으로 흡수 */}
       <Card
         className={cn(
           "border transition-all duration-1000",
           mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4",
         )}
-        style={{ transitionDelay: "800ms" }}
+        style={{ transitionDelay: "700ms" }}
+      >
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <ShoppingCart className="h-5 w-5" />
+                발주 필요 품목
+              </CardTitle>
+              <CardDescription>일평균 소비량과 현재 재고 기준 권장 발주 목록</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {!ordersData ? (
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="h-28 w-full" />
+              ))}
+            </div>
+          ) : recommended.length === 0 ? (
+            <p className="text-sm text-muted-foreground">현재 발주가 필요한 품목이 없습니다.</p>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {recommended.map((rec, i) => {
+                const meta = urgencyMeta[rec.urgency]
+                return (
+                  <div
+                    key={rec.product + i}
+                    className={cn(
+                      "rounded-lg border p-4 transition-all duration-600 hover:bg-muted/50",
+                      meta.tone,
+                      mounted ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4",
+                    )}
+                    style={{ transitionDelay: `${800 + i * 80}ms` }}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-medium leading-tight">{rec.product}</p>
+                      <Badge variant="outline" className={cn("shrink-0", meta.tone)}>
+                        {meta.label}
+                      </Badge>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">현재 재고</span>
+                      <span className="font-medium">{rec.currentStock}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">일평균 소비</span>
+                      <span className="font-medium">{rec.dailyUsage}</span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between border-t pt-2 text-sm">
+                      <span className="text-muted-foreground">권장 발주량</span>
+                      <span className="font-semibold text-primary">{rec.recommendedQty}</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card
+        className={cn(
+          "border transition-all duration-1000",
+          mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4",
+        )}
+        style={{ transitionDelay: "900ms" }}
       >
         <CardHeader>
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <CardTitle>재고 목록</CardTitle>
-              <CardDescription>품목별 재고 현황을 확인합니다</CardDescription>
+              <CardDescription>재고 비율이 낮은 품목부터 표시됩니다</CardDescription>
             </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -359,49 +385,17 @@ export default function InventoryPage() {
             </TabsList>
           </Tabs>
 
-          <div className="rounded-lg border">
+          <div className="rounded-lg border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-24">품목코드</TableHead>
-                  <TableHead>
-                    <Button
-                      variant="ghost"
-                      className="h-auto p-0 hover:bg-transparent font-medium"
-                      onClick={() => handleSort("product")}
-                    >
-                      품목명 <SortIcon columnKey="product" />
-                    </Button>
-                  </TableHead>
-                  <TableHead>
-                    <Button
-                      variant="ghost"
-                      className="h-auto p-0 hover:bg-transparent font-medium"
-                      onClick={() => handleSort("category")}
-                    >
-                      카테고리 <SortIcon columnKey="category" />
-                    </Button>
-                  </TableHead>
-                  <TableHead>
-                    <Button
-                      variant="ghost"
-                      className="h-auto p-0 hover:bg-transparent font-medium"
-                      onClick={() => handleSort("stockPercent")}
-                    >
-                      현재 재고 <SortIcon columnKey="stockPercent" />
-                    </Button>
-                  </TableHead>
+                  <TableHead>품목명</TableHead>
+                  <TableHead>카테고리</TableHead>
+                  <TableHead>현재 재고</TableHead>
                   <TableHead>재고 상태</TableHead>
                   <TableHead>단가</TableHead>
-                  <TableHead>
-                    <Button
-                      variant="ghost"
-                      className="h-auto p-0 hover:bg-transparent font-medium"
-                      onClick={() => handleSort("lastUpdated")}
-                    >
-                      최종 업데이트 <SortIcon columnKey="lastUpdated" />
-                    </Button>
-                  </TableHead>
+                  <TableHead>최종 업데이트</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -413,7 +407,7 @@ export default function InventoryPage() {
                         </TableCell>
                       </TableRow>
                     ))
-                  : filteredAndSortedItems.map((item, index) => {
+                  : filteredItems.map((item, index) => {
                       const stockStatus = getStockStatus(item)
                       const stockPercent = getStockLevelPercent(item)
                       const status = stockStatusConfig[stockStatus]
@@ -424,14 +418,16 @@ export default function InventoryPage() {
                             "cursor-pointer hover:bg-muted/50 transition-all duration-600",
                             mounted ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4",
                           )}
-                          style={{ transitionDelay: `${1000 + index * 60}ms` }}
+                          style={{ transitionDelay: `${1000 + index * 30}ms` }}
                           onClick={() => handleEditClick(item)}
                         >
                           <TableCell className="font-mono text-sm">{item.id}</TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <span className="font-medium">{item.product}</span>
-                              {stockStatus === "low" && <AlertTriangle className="h-4 w-4 text-destructive" />}
+                              {stockStatus === "low" && (
+                                <AlertTriangle className="h-4 w-4 text-destructive" />
+                              )}
                             </div>
                           </TableCell>
                           <TableCell>
@@ -453,7 +449,9 @@ export default function InventoryPage() {
                               {status.label}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-muted-foreground">{formatCurrency(item.unitPrice)}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {formatCurrency(item.unitPrice)}
+                          </TableCell>
                           <TableCell className="text-muted-foreground">{item.lastUpdated}</TableCell>
                         </TableRow>
                       )
@@ -462,7 +460,7 @@ export default function InventoryPage() {
             </Table>
           </div>
 
-          <p className="mt-4 text-sm text-muted-foreground">총 {filteredAndSortedItems.length}개 품목</p>
+          <p className="mt-4 text-sm text-muted-foreground">총 {filteredItems.length}개 품목</p>
         </CardContent>
       </Card>
 
@@ -560,30 +558,9 @@ export default function InventoryPage() {
                 취소
               </Button>
               <Button onClick={handleEditSave} disabled={isSubmitting}>
-                저장
+                {isSubmitting ? "저장 중..." : "저장"}
               </Button>
             </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>품목 삭제</DialogTitle>
-            <DialogDescription>
-              정말로 <span className="font-medium text-foreground">{selectedItem?.product}</span> 품목을
-              삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setIsDeleteConfirmOpen(false)}>
-              취소
-            </Button>
-            <Button variant="destructive" onClick={handleDeleteConfirm} disabled={isSubmitting}>
-              삭제
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -593,20 +570,23 @@ export default function InventoryPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>품목 추가</DialogTitle>
-            <DialogDescription>새로운 품목을 추가합니다</DialogDescription>
+            <DialogDescription>새 품목을 등록합니다</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4 py-4">
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium">품목명</label>
               <Input
-                placeholder="품목명을 입력하세요"
                 value={addForm.product}
                 onChange={(e) => setAddForm({ ...addForm, product: e.target.value })}
+                placeholder="예: 아메리카노 원두"
               />
             </div>
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium">카테고리</label>
-              <Select value={addForm.category} onValueChange={(value) => setAddForm({ ...addForm, category: value })}>
+              <Select
+                value={addForm.category}
+                onValueChange={(value) => setAddForm({ ...addForm, category: value })}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -627,15 +607,13 @@ export default function InventoryPage() {
                 <div className="flex gap-2">
                   <Input
                     type="number"
-                    placeholder="수량"
-                    value={addForm.currentStock || ""}
+                    value={addForm.currentStock}
                     onChange={(e) => setAddForm({ ...addForm, currentStock: Number(e.target.value) })}
                   />
                   <Input
                     value={addForm.unit}
                     onChange={(e) => setAddForm({ ...addForm, unit: e.target.value })}
                     className="w-16"
-                    placeholder="단위"
                   />
                 </div>
               </div>
@@ -643,50 +621,70 @@ export default function InventoryPage() {
                 <label className="text-sm font-medium">단가</label>
                 <Input
                   type="number"
-                  placeholder="원"
-                  value={addForm.unitPrice || ""}
+                  value={addForm.unitPrice}
                   onChange={(e) => setAddForm({ ...addForm, unitPrice: Number(e.target.value) })}
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium">최소 재고</label>
+                <label className="text-sm font-medium">최소</label>
                 <Input
                   type="number"
-                  value={addForm.minStock || ""}
+                  value={addForm.minStock}
                   onChange={(e) => setAddForm({ ...addForm, minStock: Number(e.target.value) })}
                 />
               </div>
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium">최대 재고</label>
+                <label className="text-sm font-medium">최대</label>
                 <Input
                   type="number"
-                  value={addForm.maxStock || ""}
+                  value={addForm.maxStock}
                   onChange={(e) => setAddForm({ ...addForm, maxStock: Number(e.target.value) })}
                 />
               </div>
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">일평균 사용량</label>
-              <Input
-                type="number"
-                placeholder="일평균 사용량"
-                value={addForm.dailyUsage || ""}
-                onChange={(e) => setAddForm({ ...addForm, dailyUsage: Number(e.target.value) })}
-              />
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium">일평균</label>
+                <Input
+                  type="number"
+                  value={addForm.dailyUsage}
+                  onChange={(e) => setAddForm({ ...addForm, dailyUsage: Number(e.target.value) })}
+                />
+              </div>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsAddOpen(false)}>
               취소
             </Button>
-            <Button onClick={handleAddItem} disabled={!addForm.product || isSubmitting}>
-              추가
+            <Button onClick={handleAddItem} disabled={isSubmitting || !addForm.product}>
+              {isSubmitting ? "추가 중..." : "추가"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>품목 삭제</DialogTitle>
+            <DialogDescription>
+              <span className="font-medium text-foreground">{selectedItem?.product}</span>을(를) 삭제하시겠습니까?
+              이 작업은 되돌릴 수 없습니다.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteConfirmOpen(false)}>
+              취소
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteConfirm} disabled={isSubmitting}>
+              {isSubmitting ? "삭제 중..." : "삭제"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   )
 }

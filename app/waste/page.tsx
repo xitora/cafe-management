@@ -11,7 +11,6 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  Download,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -132,10 +131,6 @@ export default function WastePage() {
           <h1 className="text-2xl font-bold tracking-tight md:text-3xl">폐기 관리</h1>
           <p className="text-muted-foreground">유통기한 관리 및 폐기 현황을 확인합니다</p>
         </div>
-        <Button variant="outline">
-          <Download className="mr-2 h-4 w-4" />
-          리포트
-        </Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

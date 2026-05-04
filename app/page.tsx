@@ -23,7 +23,7 @@ import { AIPredictionModal } from "@/components/ai-prediction-modal"
 import { DownloadReportModal } from "@/components/download-report-modal"
 import { cn } from "@/lib/utils"
 import { fetcher } from "@/lib/fetcher"
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
+import { Area, AreaChart, CartesianGrid, ReferenceLine, XAxis, YAxis } from "recharts"
 import {
   ChartConfig,
   ChartContainer,
@@ -40,7 +40,8 @@ interface DashboardResponse {
     lowStock: number
     expiringCount: number
   }
-  forecast: Array<{ date: string; actual: number | null; predicted: number }>
+  forecast: Array<{ date: string; actual: number | null; predicted: number; isToday: boolean }>
+  todayLabel: string
   alerts: Array<{
     id: number
     type: "urgent" | "warning" | "info"
@@ -208,6 +209,21 @@ export default function DashboardPage() {
                   <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} fontSize={12} />
                   <YAxis tickLine={false} axisLine={false} tickMargin={8} fontSize={12} width={40} />
                   <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" />} />
+                  {data.todayLabel && (
+                    <ReferenceLine
+                      x={data.todayLabel}
+                      stroke="var(--primary)"
+                      strokeDasharray="4 4"
+                      strokeWidth={1.5}
+                      label={{
+                        value: "오늘",
+                        position: "top",
+                        fill: "var(--primary)",
+                        fontSize: 11,
+                        fontWeight: 600,
+                      }}
+                    />
+                  )}
                   <defs>
                     <linearGradient id="fillActual" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="var(--color-actual)" stopOpacity={0.8} />

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { listOrders, listSales, listWasteHistory, daysAgo, toISO } from "@/lib/db"
+import { listOrders, listSales, listWasteHistory, daysAgo } from "@/lib/db"
 
 function parseCost(v: string): number {
   return Number(v.replace(/[^0-9]/g, ""))
@@ -12,8 +12,10 @@ export async function GET() {
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
+  const todayISO = daysAgo(0)
+  const todayLabel = `${today.getMonth() + 1}/${today.getDate()}`
 
-  // ----- This month vs last month -----
+  // ----- 이번 달 vs 지난 달 -----
   const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1)
   const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1)
   const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0)
@@ -27,9 +29,8 @@ export async function GET() {
   const lastMonthSales = sales
     .filter((s) => inRange(s.date, lastMonthStart, lastMonthEnd))
     .reduce((sum, s) => sum + s.amount, 0)
-  const salesChange = lastMonthSales > 0
-    ? Math.round(((thisMonthSales - lastMonthSales) / lastMonthSales) * 1000) / 10
-    : 0
+  const salesChange =
+    lastMonthSales > 0 ? Math.round(((thisMonthSales - lastMonthSales) / lastMonthSales) * 1000) / 10 : 0
 
   const thisMonthOrders = orders
     .filter((o) => inRange(o.date, thisMonthStart, today))
@@ -37,9 +38,10 @@ export async function GET() {
   const lastMonthOrders = orders
     .filter((o) => inRange(o.date, lastMonthStart, lastMonthEnd))
     .reduce((sum, o) => sum + parseCost(o.price), 0)
-  const ordersChange = lastMonthOrders > 0
-    ? Math.round(((thisMonthOrders - lastMonthOrders) / lastMonthOrders) * 1000) / 10
-    : 0
+  const ordersChange =
+    lastMonthOrders > 0
+      ? Math.round(((thisMonthOrders - lastMonthOrders) / lastMonthOrders) * 1000) / 10
+      : 0
 
   const thisMonthWaste = waste
     .filter((w) => inRange(w.date, thisMonthStart, today))
@@ -47,36 +49,58 @@ export async function GET() {
   const lastMonthWaste = waste
     .filter((w) => inRange(w.date, lastMonthStart, lastMonthEnd))
     .reduce((sum, w) => sum + parseCost(w.cost), 0)
-  const wasteChange = lastMonthWaste > 0
-    ? Math.round(((thisMonthWaste - lastMonthWaste) / lastMonthWaste) * 1000) / 10
-    : 0
+  const wasteChange =
+    lastMonthWaste > 0 ? Math.round(((thisMonthWaste - lastMonthWaste) / lastMonthWaste) * 1000) / 10 : 0
 
-  const profitMargin = thisMonthSales > 0
-    ? Math.round(((thisMonthSales - thisMonthOrders - thisMonthWaste) / thisMonthSales) * 1000) / 10
-    : 0
-  const lastProfitMargin = lastMonthSales > 0
-    ? Math.round(((lastMonthSales - lastMonthOrders - lastMonthWaste) / lastMonthSales) * 1000) / 10
-    : 0
+  const profitMargin =
+    thisMonthSales > 0
+      ? Math.round(((thisMonthSales - thisMonthOrders - thisMonthWaste) / thisMonthSales) * 1000) / 10
+      : 0
+  const lastProfitMargin =
+    lastMonthSales > 0
+      ? Math.round(((lastMonthSales - lastMonthOrders - lastMonthWaste) / lastMonthSales) * 1000) / 10
+      : 0
   const profitChange = Math.round((profitMargin - lastProfitMargin) * 10) / 10
 
-  // ----- Weekly chart (last 7 days) -----
-  const dayLabels = ["일", "월", "화", "수", "목", "금", "토"]
-  const weekly: Array<{ day: string; sales: number; orders: number; waste: number }> = []
+  // ----- 주간 차트 (지난 7일, 일자 라벨) -----
+  const weekly: Array<{
+    date: string
+    label: string
+    sales: number
+    isToday: boolean
+  }> = []
   for (let i = 6; i >= 0; i--) {
     const dISO = daysAgo(i)
     const date = new Date(dISO)
     const daySales = sales.filter((s) => s.date === dISO).reduce((sum, s) => sum + s.quantity, 0)
-    const dayOrders = orders.filter((o) => o.date === dISO).length
-    const dayWaste = waste.filter((w) => w.date === dISO).reduce((sum, w) => sum + parseCost(w.cost), 0)
     weekly.push({
-      day: dayLabels[date.getDay()],
+      date: dISO,
+      label: `${date.getMonth() + 1}/${date.getDate()}`,
       sales: daySales,
-      orders: dayOrders,
-      waste: Math.round(dayWaste / 1000),
+      isToday: dISO === todayISO,
     })
   }
 
-  // ----- Top products (last 30 days) -----
+  // ----- 월간 차트 (지난 30일) -----
+  const monthly: Array<{
+    date: string
+    label: string
+    sales: number
+    isToday: boolean
+  }> = []
+  for (let i = 29; i >= 0; i--) {
+    const dISO = daysAgo(i)
+    const date = new Date(dISO)
+    const daySales = sales.filter((s) => s.date === dISO).reduce((sum, s) => sum + s.quantity, 0)
+    monthly.push({
+      date: dISO,
+      label: `${date.getMonth() + 1}/${date.getDate()}`,
+      sales: daySales,
+      isToday: dISO === todayISO,
+    })
+  }
+
+  // ----- TOP 5 (지난 30일) -----
   const last30 = new Set<string>()
   for (let i = 0; i < 30; i++) last30.add(daysAgo(i))
   const productAgg = new Map<string, { sales: number; revenue: number }>()
@@ -110,7 +134,7 @@ export async function GET() {
       }
     })
 
-  // ----- Category breakdown (this month) -----
+  // ----- 카테고리별 매출 -----
   const catAgg = new Map<string, number>()
   for (const s of sales) {
     if (inRange(s.date, thisMonthStart, today)) {
@@ -124,7 +148,7 @@ export async function GET() {
     amount: `₩${amount.toLocaleString()}`,
   }))
 
-  // ----- Cost breakdown (synthetic but proportional) -----
+  // ----- 비용 구성 -----
   const costData = [
     { name: "원재료비", pct: 45 },
     { name: "인건비", pct: 30 },
@@ -136,38 +160,6 @@ export async function GET() {
     amount: `₩${Math.round((thisMonthSales * c.pct) / 100).toLocaleString()}`,
     color: `bg-chart-${i + 1}`,
   }))
-
-  // ----- Recent reports listing -----
-  const recentReports = [
-    {
-      id: 1,
-      title: `${today.getMonth() + 1}월 주간 리포트`,
-      type: "weekly",
-      date: toISO(today),
-      status: "ready",
-    },
-    {
-      id: 2,
-      title: `${lastMonthEnd.getMonth() + 1}월 월간 리포트`,
-      type: "monthly",
-      date: toISO(thisMonthStart),
-      status: "ready",
-    },
-    {
-      id: 3,
-      title: `${Math.floor(today.getMonth() / 3) + 1}분기 분석 리포트`,
-      type: "quarterly",
-      date: toISO(thisMonthStart),
-      status: "ready",
-    },
-    {
-      id: 4,
-      title: "재고 분석 리포트",
-      type: "inventory",
-      date: daysAgo(3),
-      status: "ready",
-    },
-  ]
 
   return NextResponse.json({
     stats: {
@@ -181,9 +173,10 @@ export async function GET() {
       profitMarginChangePct: profitChange,
     },
     weekly,
+    monthly,
+    todayLabel,
     topProducts,
     categoryData,
     costData,
-    recentReports,
   })
 }

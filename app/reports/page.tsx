@@ -1,9 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import useSWR from "swr"
 import {
-  FileText,
   Download,
   Calendar,
   TrendingUp,
@@ -12,18 +11,28 @@ import {
   ShoppingCart,
   Trash2,
   BarChart3,
-  ArrowRight,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DownloadReportModal } from "@/components/download-report-modal"
 import { cn } from "@/lib/utils"
 import { fetcher, formatKRW } from "@/lib/fetcher"
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
-import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Cell, ReferenceLine } from "recharts"
+import {
+  ChartConfig,
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart"
+
+interface ChartPoint {
+  date: string
+  label: string
+  sales: number
+  isToday: boolean
+}
 
 interface ReportsResponse {
   stats: {
@@ -36,11 +45,18 @@ interface ReportsResponse {
     profitMargin: number
     profitMarginChangePct: number
   }
-  weekly: Array<{ day: string; sales: number; orders: number; waste: number }>
-  topProducts: Array<{ rank: number; name: string; sales: number; revenue: string; trend: "up" | "down" | "stable" }>
+  weekly: ChartPoint[]
+  monthly: ChartPoint[]
+  todayLabel: string
+  topProducts: Array<{
+    rank: number
+    name: string
+    sales: number
+    revenue: string
+    trend: "up" | "down" | "stable"
+  }>
   categoryData: Array<{ name: string; value: number; amount: string }>
   costData: Array<{ name: string; value: number; amount: string; color: string }>
-  recentReports: Array<{ id: number; title: string; type: string; date: string; status: string }>
 }
 
 const salesChartConfig = {
@@ -55,12 +71,19 @@ function fmtChange(v: number, invert = false): { text: string; positive: boolean
 export default function ReportsPage() {
   const { data, isLoading } = useSWR<ReportsResponse>("/api/reports", fetcher)
   const [isDownloadOpen, setIsDownloadOpen] = useState(false)
-  const [selectedPeriod, setSelectedPeriod] = useState("weekly")
+  const [period, setPeriod] = useState<"weekly" | "monthly">("weekly")
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  const chartData = useMemo(() => {
+    if (!data) return []
+    return period === "weekly" ? data.weekly : data.monthly
+  }, [data, period])
+
+  const todayLabel = data?.todayLabel
 
   const stats = data
     ? [
@@ -132,7 +155,9 @@ export default function ReportsPage() {
                 style={{ transitionDelay: `${200 + index * 150}ms` }}
               >
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">{stat.title}</CardTitle>
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    {stat.title}
+                  </CardTitle>
                   <stat.icon className="h-5 w-5 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
@@ -153,153 +178,152 @@ export default function ReportsPage() {
             ))}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card
-          className={cn(
-            "border card-hover transition-all duration-1000",
-            mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4",
-          )}
-          style={{ transitionDelay: "800ms" }}
-        >
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>주간 매출 현황</CardTitle>
-                <CardDescription>최근 7일간 판매량 추이</CardDescription>
-              </div>
-              <Tabs value={selectedPeriod} onValueChange={setSelectedPeriod}>
-                <TabsList className="h-8">
-                  <TabsTrigger value="weekly" className="text-xs">
-                    주간
-                  </TabsTrigger>
-                  <TabsTrigger value="monthly" className="text-xs">
-                    월간
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
+      <Card
+        className={cn(
+          "border card-hover transition-all duration-1000",
+          mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4",
+        )}
+        style={{ transitionDelay: "800ms" }}
+      >
+        <CardHeader>
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <CardTitle>매출 추이</CardTitle>
+              <CardDescription>
+                {period === "weekly" ? "최근 7일간 일별 판매량" : "최근 30일간 일별 판매량 (월간 흐름)"}
+              </CardDescription>
             </div>
-          </CardHeader>
-          <CardContent>
-            {data ? (
-              <ChartContainer config={salesChartConfig} className="h-64 w-full">
-                <BarChart accessibilityLayer data={data.weekly} margin={{ left: 0, right: 0, top: 10, bottom: 0 }}>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                  <XAxis dataKey="day" tickLine={false} axisLine={false} tickMargin={8} fontSize={12} />
-                  <YAxis tickLine={false} axisLine={false} tickMargin={8} fontSize={12} width={40} />
-                  <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" />} />
-                  <Bar dataKey="sales" fill="var(--color-sales)" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ChartContainer>
-            ) : (
-              <Skeleton className="h-64 w-full" />
-            )}
-          </CardContent>
-        </Card>
-
-        <Card
-          className={cn(
-            "border card-hover transition-all duration-1000",
-            mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4",
+            <Tabs value={period} onValueChange={(v) => setPeriod(v as "weekly" | "monthly")}>
+              <TabsList className="h-8">
+                <TabsTrigger value="weekly" className="text-xs">
+                  주간
+                </TabsTrigger>
+                <TabsTrigger value="monthly" className="text-xs">
+                  월간
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {data ? (
+            <ChartContainer config={salesChartConfig} className="h-72 w-full">
+              <BarChart
+                accessibilityLayer
+                data={chartData}
+                margin={{ left: 0, right: 0, top: 10, bottom: 0 }}
+              >
+                <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="label"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  fontSize={11}
+                  interval={period === "monthly" ? 3 : 0}
+                />
+                <YAxis tickLine={false} axisLine={false} tickMargin={8} fontSize={12} width={40} />
+                <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" />} />
+                {todayLabel && (
+                  <ReferenceLine
+                    x={todayLabel}
+                    stroke="var(--primary)"
+                    strokeDasharray="4 4"
+                    strokeWidth={1.5}
+                    label={{
+                      value: "오늘",
+                      position: "top",
+                      fill: "var(--primary)",
+                      fontSize: 11,
+                      fontWeight: 600,
+                    }}
+                  />
+                )}
+                <Bar dataKey="sales" radius={[4, 4, 0, 0]}>
+                  {chartData.map((p) => (
+                    <Cell
+                      key={p.label}
+                      fill={p.isToday ? "var(--primary)" : "var(--chart-1)"}
+                      fillOpacity={p.isToday ? 1 : 0.75}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ChartContainer>
+          ) : (
+            <Skeleton className="h-72 w-full" />
           )}
-          style={{ transitionDelay: "900ms" }}
-        >
-          <CardHeader>
-            <CardTitle>인기 상품 TOP 5</CardTitle>
-            <CardDescription>최근 30일 판매량 기준</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col gap-4">
-              {data?.topProducts.map((product, index) => (
-                <div
-                  key={product.rank}
-                  className={cn(
-                    "flex items-center gap-4 transition-all duration-600",
-                    mounted ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4",
-                  )}
-                  style={{ transitionDelay: `${1100 + index * 100}ms` }}
-                >
-                  <div
-                    className={cn(
-                      "flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold",
-                      product.rank === 1 && "bg-yellow-500/20 text-yellow-600 dark:text-yellow-400",
-                      product.rank === 2 && "bg-slate-300/50 text-slate-600 dark:bg-slate-600/50 dark:text-slate-300",
-                      product.rank === 3 && "bg-orange-500/20 text-orange-600 dark:text-orange-400",
-                      product.rank > 3 && "bg-muted text-muted-foreground",
-                    )}
-                  >
-                    {product.rank}
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-medium">{product.name}</p>
-                    <p className="text-sm text-muted-foreground">{product.sales.toLocaleString()}잔</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-medium">{product.revenue}</p>
-                    <div className="flex items-center justify-end gap-1 text-sm">
-                      {product.trend === "up" && <TrendingUp className="h-3 w-3 text-green-600 dark:text-green-400" />}
-                      {product.trend === "down" && <TrendingDown className="h-3 w-3 text-destructive" />}
-                      <span
-                        className={cn(
-                          product.trend === "up" && "text-green-600 dark:text-green-400",
-                          product.trend === "down" && "text-destructive",
-                          product.trend === "stable" && "text-muted-foreground",
-                        )}
-                      >
-                        {product.trend === "up" ? "상승" : product.trend === "down" ? "하락" : "유지"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {!data && Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+        </CardContent>
+      </Card>
 
       <Card
         className={cn(
-          "border transition-all duration-1000",
+          "border card-hover transition-all duration-1000",
           mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4",
         )}
-        style={{ transitionDelay: "1200ms" }}
+        style={{ transitionDelay: "900ms" }}
       >
         <CardHeader>
-          <CardTitle>최근 리포트</CardTitle>
-          <CardDescription>생성된 리포트 목록</CardDescription>
+          <CardTitle>인기 상품 TOP 5</CardTitle>
+          <CardDescription>최근 30일 판매량 기준</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-            {data?.recentReports.map((report, index) => (
+          <div className="flex flex-col gap-4">
+            {data?.topProducts.map((product, index) => (
               <div
-                key={report.id}
+                key={product.rank}
                 className={cn(
-                  "flex flex-col gap-3 rounded-lg border p-4 transition-all duration-600 hover:bg-muted/50",
+                  "flex items-center gap-4 transition-all duration-600",
                   mounted ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4",
                 )}
-                style={{ transitionDelay: `${1400 + index * 100}ms` }}
+                style={{ transitionDelay: `${1100 + index * 100}ms` }}
               >
-                <div className="flex items-start justify-between">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                    <FileText className="h-5 w-5 text-primary" />
+                <div
+                  className={cn(
+                    "flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold",
+                    product.rank === 1 && "bg-yellow-500/20 text-yellow-600 dark:text-yellow-400",
+                    product.rank === 2 &&
+                      "bg-slate-300/50 text-slate-600 dark:bg-slate-600/50 dark:text-slate-300",
+                    product.rank === 3 && "bg-orange-500/20 text-orange-600 dark:text-orange-400",
+                    product.rank > 3 && "bg-muted text-muted-foreground",
+                  )}
+                >
+                  {product.rank}
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium">{product.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {product.sales.toLocaleString()}잔
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="font-medium">{product.revenue}</p>
+                  <div className="flex items-center justify-end gap-1 text-sm">
+                    {product.trend === "up" && (
+                      <TrendingUp className="h-3 w-3 text-green-600 dark:text-green-400" />
+                    )}
+                    {product.trend === "down" && (
+                      <TrendingDown className="h-3 w-3 text-destructive" />
+                    )}
+                    <span
+                      className={cn(
+                        product.trend === "up" && "text-green-600 dark:text-green-400",
+                        product.trend === "down" && "text-destructive",
+                        product.trend === "stable" && "text-muted-foreground",
+                      )}
+                    >
+                      {product.trend === "up"
+                        ? "상승"
+                        : product.trend === "down"
+                          ? "하락"
+                          : "유지"}
+                    </span>
                   </div>
-                  <Badge variant="secondary">
-                    {report.type === "weekly" && "주간"}
-                    {report.type === "monthly" && "월간"}
-                    {report.type === "quarterly" && "분기"}
-                    {report.type === "inventory" && "재고"}
-                  </Badge>
                 </div>
-                <div>
-                  <p className="font-medium">{report.title}</p>
-                  <p className="text-sm text-muted-foreground">{report.date}</p>
-                </div>
-                <Button variant="outline" size="sm" className="w-full" onClick={() => setIsDownloadOpen(true)}>
-                  다운로드 <ArrowRight className="ml-1 h-3 w-3" />
-                </Button>
               </div>
             ))}
-            {!data && Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-44 w-full" />)}
+            {!data &&
+              Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
           </div>
         </CardContent>
       </Card>
@@ -310,13 +334,14 @@ export default function ReportsPage() {
             "border card-hover transition-all duration-1000",
             mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4",
           )}
-          style={{ transitionDelay: "1600ms" }}
+          style={{ transitionDelay: "1300ms" }}
         >
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <BarChart3 className="h-5 w-5" />
               카테고리별 매출
             </CardTitle>
+            <CardDescription>이번 달 카테고리별 매출 비중</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col gap-4">
@@ -327,7 +352,7 @@ export default function ReportsPage() {
                     "flex flex-col gap-2 transition-all duration-600",
                     mounted ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4",
                   )}
-                  style={{ transitionDelay: `${1800 + index * 100}ms` }}
+                  style={{ transitionDelay: `${1500 + index * 100}ms` }}
                 >
                   <div className="flex justify-between text-sm">
                     <span className="font-medium">{category.name}</span>
@@ -336,7 +361,10 @@ export default function ReportsPage() {
                     </span>
                   </div>
                   <div className="h-2 w-full rounded-full bg-muted">
-                    <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${category.value}%` }} />
+                    <div
+                      className="h-full rounded-full bg-primary transition-all"
+                      style={{ width: `${category.value}%` }}
+                    />
                   </div>
                 </div>
               ))}
@@ -349,10 +377,11 @@ export default function ReportsPage() {
             "border card-hover transition-all duration-1000",
             mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4",
           )}
-          style={{ transitionDelay: "1700ms" }}
+          style={{ transitionDelay: "1400ms" }}
         >
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">비용 구성</CardTitle>
+            <CardTitle>비용 구성</CardTitle>
+            <CardDescription>이번 달 비용 분포</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col gap-4">
@@ -363,7 +392,7 @@ export default function ReportsPage() {
                     "flex items-center gap-4 transition-all duration-600",
                     mounted ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4",
                   )}
-                  style={{ transitionDelay: `${1900 + index * 100}ms` }}
+                  style={{ transitionDelay: `${1600 + index * 100}ms` }}
                 >
                   <div className={cn("h-3 w-3 rounded-full", category.color)} />
                   <div className="flex-1">

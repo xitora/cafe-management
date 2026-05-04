@@ -1,8 +1,7 @@
 import type { Metadata } from 'next'
 import { Analytics } from '@vercel/analytics/next'
 import { ThemeProvider } from '@/components/theme-provider'
-import { AppSidebar } from '@/components/app-sidebar'
-import { MobileHeader } from '@/components/mobile-header'
+import { AppHeader } from '@/components/app-header'
 import { PageTransition } from '@/components/page-transition'
 import './globals.css'
 
@@ -57,14 +56,11 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <div className="relative min-h-screen">
-            <AppSidebar />
-            <MobileHeader />
-            <main className="lg:pl-64">
+          <div className="relative flex min-h-screen flex-col">
+            <AppHeader />
+            <main className="flex-1">
               <div className="mx-auto max-w-7xl p-4 lg:p-8">
-                <PageTransition>
-                  {children}
-                </PageTransition>
+                <PageTransition>{children}</PageTransition>
               </div>
             </main>
           </div>
