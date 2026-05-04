@@ -189,16 +189,15 @@ export default function DashboardPage() {
             ))}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card
-          className={cn(
-            "border card-hover transition-all duration-1000",
-            mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4",
-          )}
-          style={{ transitionDelay: "700ms" }}
-        >
-          <CardHeader>
-            <CardTitle>수요 예측</CardTitle>
+      <Card
+        className={cn(
+          "border card-hover transition-all duration-1000",
+          mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4",
+        )}
+        style={{ transitionDelay: "700ms" }}
+      >
+        <CardHeader>
+          <CardTitle>수요 예측</CardTitle>
             <CardDescription>실제 판매량과 AI 예측 비교 (14일)</CardDescription>
           </CardHeader>
           <CardContent>
@@ -325,7 +324,6 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
-      </div>
 
       <AIPredictionModal open={isPredictionOpen} onOpenChange={setIsPredictionOpen} />
       <DownloadReportModal open={isDownloadOpen} onOpenChange={setIsDownloadOpen} />

@@ -167,16 +167,15 @@ export default function AccuracyPage() {
             ))}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Card
-          className={cn(
-            "border card-hover lg:col-span-2 transition-all duration-1000",
-            mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4",
-          )}
-          style={{ transitionDelay: "800ms" }}
-        >
-          <CardHeader>
-            <CardTitle>주간 정확도 추이</CardTitle>
+      <Card
+        className={cn(
+          "border card-hover transition-all duration-1000",
+          mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4",
+        )}
+        style={{ transitionDelay: "800ms" }}
+      >
+        <CardHeader>
+          <CardTitle>주간 정확도 추이</CardTitle>
             <CardDescription>최근 7일간 일별 예측 정확도</CardDescription>
           </CardHeader>
           <CardContent>
@@ -298,7 +297,6 @@ export default function AccuracyPage() {
             </div>
           </CardContent>
         </Card>
-      </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card
