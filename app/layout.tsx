@@ -8,7 +8,6 @@ import './globals.css'
 export const metadata: Metadata = {
   title: '물타는 알바생 - 스마트 카페 관리',
   description: 'AI 기반 수요 예측 및 재고 관리 시스템',
-  generator: 'v0.app',
   icons: {
     icon: [
       {
