@@ -12,10 +12,10 @@ yarn dev
 pnpm dev
 ```
 
-[http://localhost:3000](http://localhost:3000)를 열어 결과 확인
+[http://localhost:3000](http://localhost:3000) 에서 결과 확인
 
-## Learn More
 
-To learn more, take a look at the following resources:
+
+
 
 - [Next.js 문서](https://nextjs.org/docs) - learn about Next.js features and API.
