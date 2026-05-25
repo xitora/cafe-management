@@ -107,3 +107,12 @@ npm run dev
 - [GET `/api/reports/`](http://127.0.0.1:8000/api/reports/) : 매출 추이, 인기 상품 순위, 카테고리 비율 등 대시보드 통계 조회
 
 *(추가로, Next.js 자체 API를 활용한 통합 더미 CSV 다운로드 라우트 `GET /api/reports/download`도 포함되어 있습니다.)*
+
+---
+
+## 🏆 출처 및 크레딧 (Credits)
+
+이 프로젝트의 백엔드 및 AI 모델은 다음 저장소를 참고 및 기반으로 하여 작성되었습니다.
+
+- **백엔드 (Backend):** [Gwonchanwoo/capstone-backend](https://github.com/Gwonchanwoo/capstone-backend)
+- **AI 모델 (Model):** [Akamyoyel/capstone](https://github.com/Akamyoyel/capstone)
