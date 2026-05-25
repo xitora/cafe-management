@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { CheckCircle2, Loader2, Calendar } from "lucide-react"
+import { CheckCircle2, Loader2, Calendar, Info } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Textarea } from "@/components/ui/textarea"
+import { Badge } from "@/components/ui/badge"
 import { AIPredictionProgress } from "./ai-prediction-progress"
 import { cn } from "@/lib/utils"
 
