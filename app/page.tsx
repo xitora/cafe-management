@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
 import useSWR from "swr"
 import {
@@ -117,7 +117,7 @@ export default function DashboardPage() {
     }
   }
 
-  const displayData = React.useMemo(() => {
+  const displayData = useMemo(() => {
     if (!data) return null;
     if (!customPrediction || !customPrediction.results) return data;
 

@@ -141,22 +141,30 @@ export async function GET(request: Request) {
       const tomorrowW = weathers.find((w: any) => w.base_date === tomorrowStr);
       const todayW = weathers.find((w: any) => w.base_date === todayStr);
       
-      if (tomorrowW && todayW) {
-        const diff = tomorrowW.temperature - todayW.temperature;
-        if (tomorrowW.precipitation > 0) {
-          weatherAlertDesc = `내일 비 예상 (${tomorrowW.precipitation}mm) - 배달 및 따뜻한 음료 수요 증가 예측`;
-        } else if (diff > 0) {
-          weatherAlertDesc = `내일 기온 상승 예상 (+${diff}°C) - 아이스 음료 수요 증가 예측`;
-        } else if (diff < 0) {
-          weatherAlertDesc = `내일 기온 하락 예상 (${diff}°C) - 따뜻한 베이커리/음료 준비 필요`;
+      if (tomorrowW) {
+        const diff = todayW ? tomorrowW.temperature - todayW.temperature : 0;
+        
+        const getPtyText = (pty: number) => {
+          switch (pty) {
+            case 1: return "비";
+            case 2: return "진눈깨비(비/눈)";
+            case 3: return "눈";
+            case 4: return "소나기";
+            default: return "강수";
+          }
+        };
+
+        if (tomorrowW.pty_code > 0 || tomorrowW.precipitation > 0) {
+          const typeStr = tomorrowW.pty_code > 0 ? getPtyText(tomorrowW.pty_code) : "비";
+          const measureStr = typeStr.includes("눈") ? `예상 강수/적설량: ${tomorrowW.precipitation}mm 내외` : `예상 강수량: ${tomorrowW.precipitation}mm`;
+          
+          weatherAlertDesc = `내일 ${typeStr} 소식이 있습니다. (${measureStr})\n- 배달 및 따뜻한 메뉴 수요 증가 대비 권장`;
+        } else if (todayW && diff > 0) {
+          weatherAlertDesc = `내일 기온 상승 예상 (+${diff}°C)\n- 아이스 음료 수요 증가 예측`;
+        } else if (todayW && diff < 0) {
+          weatherAlertDesc = `내일 기온 하락 예상 (${diff}°C)\n- 따뜻한 베이커리/음료 준비 필요`;
         } else {
-          weatherAlertDesc = `내일 맑은 날씨 지속 - 평년 수준 수요 예상 (최고 ${tomorrowW.temperature}°C)`;
-        }
-      } else if (tomorrowW) {
-        if (tomorrowW.precipitation > 0) {
-          weatherAlertDesc = `내일 비 예상 (${tomorrowW.precipitation}mm) - 배달 수요 증가 예측`;
-        } else {
-          weatherAlertDesc = `내일 최고기온 ${tomorrowW.temperature}°C - 기온에 맞는 매장 온도 조절 권장`;
+          weatherAlertDesc = `내일 맑은 날씨 지속\n- 평년 수준 수요 예상 (최고 ${tomorrowW.temperature}°C)`;
         }
       }
     }

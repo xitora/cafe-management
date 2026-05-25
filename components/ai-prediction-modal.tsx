@@ -239,17 +239,21 @@ export function AIPredictionModal({ open, onOpenChange, onComplete }: AIPredicti
                     <Badge variant="secondary" className="text-[10px]">기상청 연동 (비/눈 자동)</Badge>
                   </div>
                   
-                  {/* 자동 감지된 날씨 표시 */}
-                  {(selectedWeather.includes("비") || selectedWeather.includes("눈")) && (
-                    <div className="mb-3 flex gap-2 border-b pb-3 border-border">
-                      {selectedWeather.includes("비") && (
-                        <Badge variant="default" className="bg-blue-500 hover:bg-blue-600 cursor-default">🌧 비 (자동 감지)</Badge>
-                      )}
-                      {selectedWeather.includes("눈") && (
-                        <Badge variant="default" className="bg-sky-400 hover:bg-sky-500 cursor-default">❄️ 눈 (자동 감지)</Badge>
-                      )}
-                    </div>
-                  )}
+                  {/* 자동 감지된 날씨 표시 (항상 표시하되 상태에 따라 색상 변경) */}
+                  <div className="mb-3 flex gap-2 border-b pb-3 border-border">
+                    <Badge 
+                      variant={selectedWeather.includes("비") ? "default" : "secondary"} 
+                      className={cn("cursor-default transition-all", selectedWeather.includes("비") ? "bg-blue-500 hover:bg-blue-600" : "opacity-40")}
+                    >
+                      🌧 비 ({selectedWeather.includes("비") ? "감지됨" : "예보 없음"})
+                    </Badge>
+                    <Badge 
+                      variant={selectedWeather.includes("눈") ? "default" : "secondary"} 
+                      className={cn("cursor-default transition-all", selectedWeather.includes("눈") ? "bg-sky-400 hover:bg-sky-500 text-white" : "opacity-40")}
+                    >
+                      ❄️ 눈 ({selectedWeather.includes("눈") ? "감지됨" : "예보 없음"})
+                    </Badge>
+                  </div>
 
                   <div className="flex flex-wrap gap-2">
                     {weatherOptions.map((option) => (
