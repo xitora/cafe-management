@@ -107,8 +107,53 @@ export default function DashboardPage() {
     modelApplication: false,
   })
   const [showDashboard, setShowDashboard] = useState(false)
+  const [customPrediction, setCustomPrediction] = useState<any>(null)
 
   const { data, isLoading } = useSWR<DashboardResponse>(`/api/dashboard?region=${region.name}&lat=${region.lat}&lon=${region.lon}`, fetcher)
+
+  const handlePredictionComplete = (result: any) => {
+    if (result && result.results) {
+      setCustomPrediction(result)
+    }
+  }
+
+  const displayData = React.useMemo(() => {
+    if (!data) return null;
+    if (!customPrediction || !customPrediction.results) return data;
+
+    const newForecast = [...data.forecast];
+    const results = customPrediction.results;
+    
+    // Sum q50_daily by date (M/D)
+    const newSums: Record<string, number> = {};
+    results.forEach((r: any) => {
+      const parts = r.date.split("-");
+      if (parts.length === 3) {
+        const label = `${parseInt(parts[1])}/${parseInt(parts[2])}`;
+        newSums[label] = (newSums[label] || 0) + (r.q50_daily || 0);
+      }
+    });
+
+    let newPredictedToday = data.stats.predictedToday;
+
+    newForecast.forEach((f, idx) => {
+      if (newSums[f.date] !== undefined) {
+        newForecast[idx] = { ...f, predicted: Math.round(newSums[f.date]) };
+        if (f.isToday) {
+          newPredictedToday = Math.round(newSums[f.date]);
+        }
+      }
+    });
+
+    return {
+      ...data,
+      stats: {
+        ...data.stats,
+        predictedToday: newPredictedToday,
+      },
+      forecast: newForecast,
+    };
+  }, [data, customPrediction]);
 
   useEffect(() => {
     if (showDashboard) {
@@ -155,29 +200,29 @@ export default function DashboardPage() {
     }, 800)
   }
 
-  const stats = data
+  const stats = displayData
     ? [
         {
           title: "오늘 예상 판매량",
-          value: `${data.stats.predictedToday.toLocaleString()}잔`,
+          value: `${displayData.stats.predictedToday.toLocaleString()}잔`,
           change:
-            data.stats.dayOverDayPct >= 0
-              ? `+${data.stats.dayOverDayPct}%`
-              : `${data.stats.dayOverDayPct}%`,
-          changeType: data.stats.dayOverDayPct >= 0 ? ("positive" as const) : ("negative" as const),
+            displayData.stats.dayOverDayPct >= 0
+              ? `+${displayData.stats.dayOverDayPct}%`
+              : `${displayData.stats.dayOverDayPct}%`,
+          changeType: displayData.stats.dayOverDayPct >= 0 ? ("positive" as const) : ("negative" as const),
           description: "전일 대비",
           icon: TrendingUp,
         },
         {
           title: "재고 부족 품목",
-          value: `${data.stats.lowStock}개`,
+          value: `${displayData.stats.lowStock}개`,
           description: "긴급 발주 필요",
           icon: Package,
           urgent: true,
         },
         {
           title: "유통기한 임박",
-          value: `${data.stats.expiringCount}개`,
+          value: `${displayData.stats.expiringCount}개`,
           description: "3일 이내 만료",
           icon: Clock,
           warning: true,
@@ -356,16 +401,16 @@ export default function DashboardPage() {
             <CardDescription>실제 판매량과 AI 예측 비교 (10일)</CardDescription>
           </CardHeader>
           <CardContent>
-            {data ? (
+            {displayData ? (
               <ChartContainer config={chartConfig} className="h-72 w-full">
-                <AreaChart accessibilityLayer data={data.forecast} margin={{ left: 0, right: 0, top: 10, bottom: 0 }}>
+                <AreaChart accessibilityLayer data={displayData.forecast} margin={{ left: 0, right: 0, top: 10, bottom: 0 }}>
                   <CartesianGrid vertical={false} strokeDasharray="3 3" />
                   <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} fontSize={12} />
                   <YAxis tickLine={false} axisLine={false} tickMargin={8} fontSize={12} width={40} />
                   <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" />} />
-                  {data.todayLabel && (
+                  {displayData.todayLabel && (
                     <ReferenceLine
-                      x={data.todayLabel}
+                      x={displayData.todayLabel}
                       stroke="var(--primary)"
                       strokeDasharray="4 4"
                       strokeWidth={1.5}
@@ -430,7 +475,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="max-h-80 overflow-y-auto">
             <div className="flex flex-col gap-3">
-              {data?.alerts.map((alert, index) => {
+              {displayData?.alerts.map((alert, index) => {
                 const Icon = alertIconMap[alert.type] || Info
                 return (
                   <div
@@ -488,7 +533,11 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-      <AIPredictionModal open={isPredictionOpen} onOpenChange={setIsPredictionOpen} />
+      <AIPredictionModal 
+        open={isPredictionOpen} 
+        onOpenChange={setIsPredictionOpen} 
+        onComplete={handlePredictionComplete}
+      />
       <DownloadReportModal open={isDownloadOpen} onOpenChange={setIsDownloadOpen} />
     </div>
   )

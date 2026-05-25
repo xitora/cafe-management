@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils"
 interface AIPredictionModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  onComplete?: (result: any) => void
 }
 
 type Step = "input" | "confirm" | "analyzing" | "complete"
@@ -26,7 +27,7 @@ type Step = "input" | "confirm" | "analyzing" | "complete"
 const weatherOptions = ["우박", "안개", "폭염", "황사"]
 const eventOptions = ["지역 축제", "콘서트", "전시회", "스포츠 경기"]
 
-export function AIPredictionModal({ open, onOpenChange }: AIPredictionModalProps) {
+export function AIPredictionModal({ open, onOpenChange, onComplete }: AIPredictionModalProps) {
   const [step, setStep] = useState<Step>("input")
   const [progress, setProgress] = useState(0)
   const [selectedWeather, setSelectedWeather] = useState<string[]>([])
@@ -155,6 +156,9 @@ export function AIPredictionModal({ open, onOpenChange }: AIPredictionModalProps
   }, [step])
 
   const handleClose = () => {
+    if (step === "complete" && predictionResult && onComplete) {
+      onComplete(predictionResult)
+    }
     onOpenChange(false)
     setTimeout(() => {
       setStep("input")
