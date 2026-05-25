@@ -16,6 +16,10 @@ export function AIPredictionProgress({ progress, status }: AIPredictionProgressP
     <div className="flex flex-col items-center gap-6 py-4 animate-fade-in w-full max-w-md mx-auto">
       <div className="relative flex h-20 w-20 items-center justify-center">
         <Loader2 className="h-16 w-16 animate-spin text-primary" />
+        <span className="absolute text-sm font-bold text-primary">{Math.round(progress)}%</span>
+      </div>
+      <div className="w-full space-y-2">
+        <Progress value={progress} className="w-full h-2" />
       </div>
       <div className="text-center">
         <p className="text-lg font-semibold">AI 모델 분석 중...</p>

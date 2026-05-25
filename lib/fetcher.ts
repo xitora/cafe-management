@@ -1,10 +1,8 @@
+import { apiClient } from "./axios"
+
 export const fetcher = async <T = unknown>(url: string): Promise<T> => {
-  const res = await fetch(url)
-  if (!res.ok) {
-    const err = new Error(`Fetch failed: ${res.status}`)
-    throw err
-  }
-  return res.json()
+  const res = await apiClient.get<T>(url)
+  return res.data
 }
 
 export function formatKRW(value: number): string {

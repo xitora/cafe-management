@@ -90,10 +90,7 @@ const chartConfig = {
 } satisfies ChartConfig
 
 export default function DashboardPage() {
-  const [region, setRegion] = useState<Region>(
-    KOREA_REGIONS.find(r => r.name === "경상북도 경산시 하양읍") || KOREA_REGIONS[0]
-  )
-  const [openRegion, setOpenRegion] = useState(false)
+  const region = KOREA_REGIONS.find(r => r.name === "경상북도 경산시 하양읍") || KOREA_REGIONS[0]
   const [searchQuery, setSearchQuery] = useState("")
   const [isPredictionOpen, setIsPredictionOpen] = useState(false)
   const [isDownloadOpen, setIsDownloadOpen] = useState(false)
@@ -130,32 +127,23 @@ export default function DashboardPage() {
 
     if (showDashboard) return
 
-    let isDone = !!data && !isLoading
-    const interval = setInterval(() => {
-      setInitialProgress((prev) => {
-        let next = prev
-        if (!isDone) {
-          if (prev < 90) next = prev + 2
-        } else {
-          if (prev < 100) next = prev + 5
-        }
+    const handleProgress = (e: any) => {
+      const p = e.detail.progress;
+      setInitialProgress(p);
+      if (p >= 30) setInitialStatus((s) => ({ ...s, preprocessing: true }))
+      if (p >= 60) setInitialStatus((s) => ({ ...s, patternAnalysis: true }))
+      if (p >= 100) {
+        setInitialStatus((s) => ({ ...s, modelApplication: true }))
+        sessionStorage.setItem("dashboardPredictionRun", "true")
+        setTimeout(() => setShowDashboard(true), 600)
+      }
+    };
 
-        if (next >= 30) setInitialStatus((s) => ({ ...s, preprocessing: true }))
-        if (next >= 60) setInitialStatus((s) => ({ ...s, patternAnalysis: true }))
-        if (next >= 100) {
-          setInitialStatus((s) => ({ ...s, modelApplication: true }))
-          clearInterval(interval)
-          sessionStorage.setItem("dashboardPredictionRun", "true")
-          setTimeout(() => {
-            setShowDashboard(true)
-          }, 600)
-        }
-        return next > 100 ? 100 : next
-      })
-    }, 100)
-
-    return () => clearInterval(interval)
-  }, [data, isLoading, showDashboard])
+    window.addEventListener("api-progress", handleProgress);
+    return () => {
+      window.removeEventListener("api-progress", handleProgress);
+    };
+  }, [showDashboard])
 
   const stats = data
     ? [
@@ -218,68 +206,9 @@ export default function DashboardPage() {
             <h1 className="text-2xl font-bold tracking-tight md:text-3xl">종합 대시보드</h1>
             <p className="text-muted-foreground">오늘의 핵심 지표를 한눈에 확인하세요</p>
           </div>
-          <div className="mt-1 hidden md:block border-l pl-4 border-border">
-            <Popover 
-              open={openRegion} 
-              onOpenChange={(open) => {
-                setOpenRegion(open)
-                if (!open) setSearchQuery("")
-              }}
-            >
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={openRegion}
-                  className="w-[200px] justify-between"
-                >
-                  <MapPin className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                  {region.name}
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[200px] p-0" align="start">
-                <Command>
-                  <CommandInput 
-                    placeholder="지역 검색..." 
-                    value={searchQuery}
-                    onValueChange={setSearchQuery}
-                  />
-                  <CommandList>
-                    {searchQuery.trim().length > 0 ? (
-                      <>
-                        <CommandEmpty>지역을 찾을 수 없습니다.</CommandEmpty>
-                        <CommandGroup className="max-h-[300px] overflow-y-auto">
-                          {KOREA_REGIONS.filter(r => r.name.replace(/\s+/g, '').includes(searchQuery.replace(/\s+/g, ''))).slice(0, 50).map((r) => (
-                            <CommandItem
-                              key={r.id}
-                              value={r.name}
-                              onSelect={() => {
-                                setRegion(r)
-                                setOpenRegion(false)
-                                setSearchQuery("")
-                              }}
-                            >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-4 w-4",
-                                  region.id === r.id ? "opacity-100" : "opacity-0"
-                                )}
-                              />
-                              {r.name}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </>
-                    ) : (
-                      <div className="py-6 text-center text-sm text-muted-foreground">
-                        검색어를 입력하세요.
-                      </div>
-                    )}
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+          <div className="mt-1 hidden md:flex items-center border-l pl-4 border-border text-sm font-medium text-muted-foreground">
+            <MapPin className="mr-2 h-4 w-4" />
+            {region.name}
           </div>
         </div>
         <div className="flex gap-2">
