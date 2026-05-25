@@ -1,30 +1,30 @@
 # ☕ AI 스마트 카페 관리 시스템 (Cafe Management System)
 
 <div align="center">
-  <img src="https://img.shields.io/badge/Next.js-black?style=for-the-badge&logo=next.js&logoColor=white" alt="Next.js" />
-  <img src="https://img.shields.io/badge/Django-092E20?style=for-the-badge&logo=django&logoColor=white" alt="Django" />
-  <img src="https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="Tailwind CSS" />
-  <img src="https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite" />
+  <a href="https://nextjs.org/" target="_blank"><img src="https://img.shields.io/badge/Next.js-black?style=for-the-badge&logo=next.js&logoColor=white" alt="Next.js" /></a>
+  <a href="https://www.djangoproject.com/" target="_blank"><img src="https://img.shields.io/badge/Django-092E20?style=for-the-badge&logo=django&logoColor=white" alt="Django" /></a>
+  <a href="https://tailwindcss.com/" target="_blank"><img src="https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="Tailwind CSS" /></a>
+  <a href="https://www.sqlite.org/" target="_blank"><img src="https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite" /></a>
 </div>
 
 <br />
 
 ## 📖 프로젝트 설명
 
-**데이터 기반의 수요 예측**을 통해 재고 및 폐기량을 효율적으로 관리하고 종합 리포트를 제공하는 **인공지능 기반 스마트 카페 관리 플랫폼**입니다. 
+**데이터 기반의 수요 예측**을 통해 재고 및 폐기량을 효율적으로 관리하고 종합 리포트를 제공하는 **인공지능 기반 스마트 카페 관리 플랫폼**입니다.   
 머신러닝 예측 모델을 바탕으로 날씨, 요일, 공휴일 등의 외부 요인을 분석하여 향후 메뉴별 판매량을 예측하고, 이를 바탕으로 발주 권장량 산출 및 폐기 데이터를 시각화된 대시보드로 제공하여 매장 운영의 효율성을 극대화합니다.
 
 ---
 
 ## 🛠 기술 스택
 
-### 🎨 Frontend
+### 🎨 프론트엔드
 - **Framework:** Next.js (React)
 - **Styling:** Tailwind CSS
 - **UI Components:** shadcn/ui, Lucide React
 - **Data Visualization:** Recharts
 
-### ⚙️ Backend
+### ⚙️ 백엔드
 - **Framework:** Python, Django, Django REST Framework (DRF)
 - **AI/ML:** scikit-learn, pandas, numpy (수요 예측 알고리즘 적용)
 - **Database:** SQLite3 (기본 설정)
@@ -103,7 +103,7 @@ npm run dev
 
 - [GET `/api/inventory/`](http://127.0.0.1:8000/api/inventory/) : 전체 재고 및 품목 현황 리스트 조회
 - [GET `/api/waste/`](http://127.0.0.1:8000/api/waste/) : 폐기 내역 목록 및 통계 데이터 조회
-- [GET `/api/predict/`](http://127.0.0.1:8000/api/predict/) : AI 기반 메뉴별 예상 판매 수요 및 권장 발주량 예측값 조회
+- [GET `/api/forecasts/predict/`](http://127.0.0.1:8000/api/forecasts/predict/) : AI 기반 메뉴별 예상 판매 수요 및 권장 발주량 예측값 조회
 - [GET `/api/reports/`](http://127.0.0.1:8000/api/reports/) : 매출 추이, 인기 상품 순위, 카테고리 비율 등 대시보드 통계 조회
 
 *(추가로, Next.js 자체 API를 활용한 통합 더미 CSV 다운로드 라우트 `GET /api/reports/download`도 포함되어 있습니다.)*
