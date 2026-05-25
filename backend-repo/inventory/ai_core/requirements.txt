@@ -1,0 +1,5 @@
+numpy>=1.26
+pandas>=2.1
+scikit-learn>=1.4
+# Optional (for LSTM quantile model): install if you plan to run `--model lstm`
+tensorflow>=2.12
