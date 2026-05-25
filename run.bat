@@ -7,7 +7,7 @@ echo =======================================
 echo.
 
 echo [1/2] Starting Django Backend Server...
-start "Django Backend Server" cmd /k "cd backend-repo && echo Starting Backend Server... && python manage.py runserver"
+start "Django Backend Server" cmd /k "cd backend && echo Starting Backend Server... && python manage.py runserver"
 
 echo [2/2] Starting Next.js Frontend Server...
 start "Next.js Frontend Server" cmd /k "echo Starting Frontend Server... && npm run dev"

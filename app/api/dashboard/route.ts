@@ -21,7 +21,13 @@ export async function GET() {
   const last7Qty = sales.filter((s) => last7.has(s.date)).reduce((s, x) => s + x.quantity, 0)
   
   // 실제 AI 예측 데이터를 백엔드에서 1번만 가져오기 (해당 API가 향후 7일치를 모두 반환함)
-  const predictionsData = await fetchAIPredictions(todayISO);
+  let predictionsData = (global as any).cachedPredictions;
+  if (!predictionsData) {
+    predictionsData = await fetchAIPredictions(todayISO);
+    if (predictionsData && predictionsData.status === "success") {
+      (global as any).cachedPredictions = predictionsData;
+    }
+  }
   const predMap = new Map<string, number>();
 
   if (predictionsData && predictionsData.status === "success" && predictionsData.results) {
@@ -42,46 +48,50 @@ export async function GET() {
 
   // 10일 forecast (지난 7일 실제, 오늘부터 3일 예측 반영)
   const todayLabel = `${today.getMonth() + 1}/${today.getDate()}`
-  const forecast: Array<{
+  let forecast: Array<{
     date: string
     actual: number | null
     predicted: number
     isToday: boolean
-  }> = []
+  }> = (global as any).cachedForecast;
   
-  // i = 7(7일 전)부터 i = -2(2일 후)까지 총 10일
-  for (let i = 7; i >= -2; i--) {
-    const dISO = daysAgo(i)
-    let day = sales.filter((s) => s.date === dISO).reduce((s, x) => s + x.quantity, 0)
-    const date = new Date(dISO)
-    const label = `${date.getMonth() + 1}/${date.getDate()}`
-    
-    // 사용자 요청: 과거 데이터(실제 판매량)가 AI 예측치와 비슷하게 보이도록 스케일링
-    if (predictedToday > 0 && i >= 0) {
-      const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-      const multiplier = isWeekend ? (1.05 + Math.random() * 0.15) : (0.9 + Math.random() * 0.2);
-      day = Math.round(predictedToday * multiplier);
+  if (!forecast) {
+    forecast = [];
+    // i = 7(7일 전)부터 i = -2(2일 후)까지 총 10일
+    for (let i = 7; i >= -2; i--) {
+      const dISO = daysAgo(i)
+      let day = sales.filter((s) => s.date === dISO).reduce((s, x) => s + x.quantity, 0)
+      const date = new Date(dISO)
+      const label = `${date.getMonth() + 1}/${date.getDate()}`
+      
+      // 사용자 요청: 과거 데이터(실제 판매량)가 AI 예측치와 비슷하게 보이도록 스케일링
+      if (predictedToday > 0 && i >= 0) {
+        const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+        const multiplier = isWeekend ? (1.05 + Math.random() * 0.15) : (0.9 + Math.random() * 0.2);
+        day = Math.round(predictedToday * multiplier);
+      }
+
+      let actualVal: number | null = day;
+      let predVal = day;
+
+      if (i > 0) {
+        // 과거 데이터는 약간의 오차 범위를 갖는 가짜 예측값 부여 (+/- 5%)
+        const variance = 1 + (Math.random() * 0.1 - 0.05);
+        predVal = day > 0 ? Math.round(day * variance) : 0;
+      } else if (i <= 0) {
+        // 오늘과 미래는 모델 API 결과 사용
+        predVal = Math.round(predMap.get(dISO) || 0);
+        if (i < 0) actualVal = null;
+      }
+
+      forecast.push({
+        date: label,
+        actual: actualVal,
+        predicted: predVal,
+        isToday: label === todayLabel,
+      })
     }
-
-    let actualVal: number | null = day;
-    let predVal = day;
-
-    if (i > 0) {
-      // 과거 데이터는 약간의 오차 범위를 갖는 가짜 예측값 부여 (+/- 5%)
-      const variance = 1 + (Math.random() * 0.1 - 0.05);
-      predVal = day > 0 ? Math.round(day * variance) : 0;
-    } else if (i <= 0) {
-      // 오늘과 미래는 모델 API 결과 사용
-      predVal = Math.round(predMap.get(dISO) || 0);
-      if (i < 0) actualVal = null;
-    }
-
-    forecast.push({
-      date: label,
-      actual: actualVal,
-      predicted: predVal,
-      isToday: label === todayLabel,
-    })
+    (global as any).cachedForecast = forecast;
   }
 
 

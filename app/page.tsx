@@ -22,6 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { AIPredictionModal } from "@/components/ai-prediction-modal"
 import { DownloadReportModal } from "@/components/download-report-modal"
 import { AIPredictionProgress } from "@/components/ai-prediction-progress"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 import { fetcher } from "@/lib/fetcher"
 import { Area, AreaChart, CartesianGrid, ReferenceLine, XAxis, YAxis } from "recharts"
@@ -162,13 +163,24 @@ export default function DashboardPage() {
   if (!showDashboard) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center">
-        <AIPredictionProgress progress={initialProgress} status={initialStatus} />
+        <Dialog open={true}>
+          <DialogContent className="sm:max-w-md [&>button]:hidden">
+            <DialogHeader>
+              <DialogTitle className="text-xl">AI 예측 모델 실행</DialogTitle>
+              <DialogDescription>
+                AI 모델을 사용하여 미래 수요를 예측합니다
+              </DialogDescription>
+            </DialogHeader>
+            <AIPredictionProgress progress={initialProgress} status={initialStatus} />
+          </DialogContent>
+        </Dialog>
       </div>
     )
   }
 
   return (
     <div className="flex flex-col gap-8">
+
       <div
         className={`flex flex-col gap-4 md:flex-row md:items-center md:justify-between transition-all duration-1000 ${
           mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
