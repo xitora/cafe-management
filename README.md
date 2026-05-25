@@ -19,15 +19,15 @@
 ## 🛠 기술 스택
 
 ### 🎨 프론트엔드
-- **Framework:** Next.js (React)
-- **Styling:** Tailwind CSS
-- **UI Components:** shadcn/ui, Lucide React
-- **Data Visualization:** Recharts
+- **프레임워크:** Next.js (React)
+- **스타일링:** Tailwind CSS
+- **UI 컴포넌트:** shadcn/ui, Lucide React
+- **데이터 시각화:** Recharts
 
 ### ⚙️ 백엔드
-- **Framework:** Python, Django, Django REST Framework (DRF)
-- **AI/ML:** scikit-learn, pandas, numpy (수요 예측 알고리즘 적용)
-- **Database:** SQLite3 (기본 설정)
+- **프레임워크:** Python, Django, Django REST Framework (DRF)
+- **인공지능/머신러닝:** scikit-learn, pandas, numpy (수요 예측 알고리즘 적용)
+- **데이터베이스:** SQLite3 (기본 설정)
 
 ---
 
@@ -35,12 +35,12 @@
 
 프로젝트를 로컬 환경에서 실행하는 방법입니다.
 
-### 1️⃣ 사전 준비 (Prerequisites)
+### 1️⃣ 사전 준비
 이 프로젝트를 실행하려면 시스템에 다음 소프트웨어가 설치되어 있어야 합니다.
 - **Node.js** (v18 이상 권장)
 - **Python** (v3.10 이상 권장)
 
-### 2️⃣ 패키지 설치 (Installation)
+### 2️⃣ 패키지 설치
 
 **프론트엔드 종속성 설치**
 ```bash
@@ -62,13 +62,13 @@ python -m venv venv
 pip install -r requirements.txt
 ```
 
-### 3️⃣ 환경 변수 설정 (Environment Variables)
+### 3️⃣ 환경 변수 설정
 프로젝트 루트 경로에 프론트엔드용 `.env.local` 파일을 생성하여 API 서버 주소 등을 설정합니다. (기본적으로 백엔드는 `localhost:8000`을 향합니다.)
 ```env
 NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
 ```
 
-### 4️⃣ 실행 방법 (Running the App)
+### 4️⃣ 실행 방법
 
 **백엔드 서버 실행**
 ```bash
