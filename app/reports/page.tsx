@@ -21,6 +21,8 @@ import { DateRangePicker } from "@/components/date-range-picker"
 import { cn } from "@/lib/utils"
 import { fetcher, formatKRW } from "@/lib/fetcher"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Cell, ReferenceLine } from "recharts"
+import { DateRange } from "react-day-picker"
+import { addDays } from "date-fns"
 import {
   ChartConfig,
   ChartContainer,
@@ -66,6 +68,10 @@ export default function ReportsPage() {
   const { data, isLoading } = useSWR<ReportsResponse>("/api/reports", fetcher)
   const [isDownloadOpen, setIsDownloadOpen] = useState(false)
   const [period, setPeriod] = useState<"weekly" | "monthly">("weekly")
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: new Date(2026, 4, 15),
+    to: addDays(new Date(2026, 4, 15), 10),
+  })
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -104,7 +110,7 @@ export default function ReportsPage() {
           <p className="text-muted-foreground">매출, 발주, 폐기 현황을 분석합니다</p>
         </div>
         <div className="flex gap-2">
-          <DateRangePicker />
+          <DateRangePicker date={dateRange} setDate={setDateRange} />
           <Button onClick={() => setIsDownloadOpen(true)}>
             <Download className="mr-2 h-4 w-4" />
             리포트 다운로드
@@ -345,7 +351,7 @@ export default function ReportsPage() {
 
       </div>
 
-      <DownloadReportModal open={isDownloadOpen} onOpenChange={setIsDownloadOpen} />
+      <DownloadReportModal open={isDownloadOpen} onOpenChange={setIsDownloadOpen} dateRange={dateRange} />
     </div>
   )
 }

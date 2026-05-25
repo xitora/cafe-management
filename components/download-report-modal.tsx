@@ -12,9 +12,12 @@ import {
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
+import { DateRange } from "react-day-picker"
+
 interface DownloadReportModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  dateRange?: DateRange
 }
 
 const reportTypes = [
@@ -38,49 +41,26 @@ const reportTypes = [
   },
 ]
 
-const formatTypes = [
-  { id: "csv", name: "CSV", icon: FileSpreadsheet },
-]
-
-export function DownloadReportModal({ open, onOpenChange }: DownloadReportModalProps) {
+export function DownloadReportModal({ open, onOpenChange, dateRange }: DownloadReportModalProps) {
   const [selectedReport, setSelectedReport] = useState<string>("daily")
-  const [selectedFormat, setSelectedFormat] = useState<string>("csv")
   const [isDownloading, setIsDownloading] = useState(false)
   const [isComplete, setIsComplete] = useState(false)
 
   const handleDownload = async () => {
     setIsDownloading(true)
     try {
-      const res = await fetch("/api/reports")
-      if (!res.ok) throw new Error("Failed to fetch report data")
-      const data = await res.json()
+      const params = new URLSearchParams()
+      if (dateRange?.from) params.set("from", dateRange.from.toISOString())
+      if (dateRange?.to) params.set("to", dateRange.to.toISOString())
       
-      let csvContent = "\uFEFF" // UTF-8 BOM
+      const res = await fetch(`/api/reports/download?${params.toString()}`)
+      if (!res.ok) throw new Error("Failed to generate custom report")
       
-      csvContent += "=== 인기 상품 TOP 5 ===\n"
-      csvContent += "순위,상품명,판매량,매출\n"
-      data.topProducts.forEach((p: any) => {
-        csvContent += `${p.rank},${p.name},${p.sales},${p.revenue.replace(/,/g, '')}\n`
-      })
-      
-      csvContent += "\n=== 카테고리별 매출 ===\n"
-      csvContent += "카테고리,비중(%),매출\n"
-      data.categoryData.forEach((c: any) => {
-        csvContent += `${c.name},${c.value},${c.amount.replace(/,/g, '')}\n`
-      })
-
-      const chartData = selectedReport === "monthly" ? data.monthly : data.weekly
-      csvContent += "\n=== 추이 데이터 ===\n"
-      csvContent += "날짜,구분,수치\n"
-      chartData.forEach((d: any) => {
-        csvContent += `${d.date},${d.label},${d.sales}\n`
-      })
-      
-      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+      const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const link = document.createElement("a")
       link.setAttribute("href", url)
-      link.setAttribute("download", `cafe_report_${selectedReport}_${new Date().toISOString().split('T')[0]}.csv`)
+      link.setAttribute("download", `cafe_full_report_${new Date().toISOString().split('T')[0]}.csv`)
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
@@ -118,47 +98,15 @@ export function DownloadReportModal({ open, onOpenChange }: DownloadReportModalP
         ) : (
           <div className="flex flex-col gap-6 animate-fade-in-up">
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">리포트 유형</label>
-              <div className="grid gap-2">
-                {reportTypes.map((report) => (
-                  <button
-                    key={report.id}
-                    onClick={() => setSelectedReport(report.id)}
-                    className={cn(
-                      "flex items-center gap-3 rounded-lg border p-3 text-left transition-colors",
-                      selectedReport === report.id
-                        ? "border-primary bg-primary/5"
-                        : "hover:bg-muted"
-                    )}
-                  >
-                    <report.icon className={cn(
-                      "h-5 w-5",
-                      selectedReport === report.id ? "text-primary" : "text-muted-foreground"
-                    )} />
-                    <div>
-                      <p className="font-medium">{report.name}</p>
-                      <p className="text-sm text-muted-foreground">{report.description}</p>
-                    </div>
-                  </button>
-                ))}
+              <label className="text-sm font-medium">선택된 기간</label>
+              <div className="rounded-lg border p-3 text-sm text-muted-foreground bg-muted/50">
+                {dateRange?.from && dateRange?.to ? 
+                  `${dateRange.from.toLocaleDateString()} ~ ${dateRange.to.toLocaleDateString()}` 
+                  : '기간이 설정되지 않았습니다 (기본값 사용)'}
               </div>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">파일 형식</label>
-              <div className="flex gap-2">
-                {formatTypes.map((format) => (
-                  <Button
-                    key={format.id}
-                    variant={selectedFormat === format.id ? "default" : "outline"}
-                    onClick={() => setSelectedFormat(format.id)}
-                    className="flex-1"
-                  >
-                    <format.icon className="mr-2 h-4 w-4" />
-                    {format.name}
-                  </Button>
-                ))}
-              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                * 위 기간 내의 매출, 재고, 폐기, 예측 데이터를 모두 새롭게 더미로 생성하여 다운로드합니다.
+              </p>
             </div>
 
             <Button onClick={handleDownload} disabled={isDownloading} className="w-full">
@@ -170,7 +118,7 @@ export function DownloadReportModal({ open, onOpenChange }: DownloadReportModalP
               ) : (
                 <>
                   <Download className="mr-2 h-4 w-4" />
-                  다운로드
+                  CSV 다운로드
                 </>
               )}
             </Button>

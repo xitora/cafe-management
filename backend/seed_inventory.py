@@ -8,7 +8,7 @@ from django.utils import timezone
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mysite.settings')
 django.setup()
 
-from inventory.models import Product, InventoryBatch
+from inventory.models import Product, InventoryBatch, WasteHistory
 
 def create_dummy_data():
     categories = ['원두', '우유', '시럽', '파우더', '소모품', '디저트/베이커리']
@@ -42,6 +42,7 @@ def create_dummy_data():
     ]
 
     print("기존 데이터를 초기화합니다...")
+    WasteHistory.objects.all().delete()
     InventoryBatch.objects.all().delete()
     Product.objects.all().delete()
     
@@ -72,13 +73,25 @@ def create_dummy_data():
         if random.random() > 0.8:
             qty = random.randint(0, 3)
 
-        InventoryBatch.objects.create(
+        batch = InventoryBatch.objects.create(
             product=product,
             received_date=timezone.now().date() - timedelta(days=random.randint(0, 10)),
             expiration_date=timezone.now().date() + timedelta(days=exp_days),
             current_qty=qty,
             status='NORMAL' if qty > 0 else 'EMPTY'
         )
+        
+        # 🗑️ 가끔 폐기 데이터도 생성 (약 30% 확률)
+        if random.random() > 0.7:
+            waste_qty = random.randint(1, 5)
+            reason = random.choice(['유통기한 만료', '포장 훼손', '품질 저하(변질)', '조리/제조 실수'])
+            WasteHistory.objects.create(
+                product=product,
+                batch=batch,
+                waste_datetime=timezone.now() - timedelta(days=random.randint(0, 7), hours=random.randint(0, 23)),
+                quantity=waste_qty,
+                reason=reason
+            )
         
     print(f"완료! 총 {len(items)}개의 더미 데이터가 생성되었습니다.")
 

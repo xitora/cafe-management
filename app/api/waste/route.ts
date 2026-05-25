@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server"
 import { listExpiring, listWasteHistory, createWasteHistory } from "@/lib/db"
 
-function parseCost(v: string): number {
-  return Number(v.replace(/[^0-9]/g, ""))
+function parseCost(v: string | number | undefined): number {
+  if (typeof v === 'number') return v;
+  if (!v) return 0;
+  return Number(String(v).replace(/[^0-9]/g, ""))
 }
 
 export async function GET() {
@@ -19,13 +21,13 @@ export async function GET() {
 
   const weekly = history
     .filter((h) => new Date(h.date) >= weekAgo)
-    .reduce((sum, h) => sum + parseCost(h.cost), 0)
+    .reduce((sum, h) => sum + parseCost((h as any).loss ?? (h as any).cost), 0)
   const prevWeekly = history
     .filter((h) => {
       const d = new Date(h.date)
       return d >= prevWeekStart && d < weekAgo
     })
-    .reduce((sum, h) => sum + parseCost(h.cost), 0)
+    .reduce((sum, h) => sum + parseCost((h as any).loss ?? (h as any).cost), 0)
 
   const change = prevWeekly > 0
     ? Math.round(((weekly - prevWeekly) / prevWeekly) * 1000) / 10
