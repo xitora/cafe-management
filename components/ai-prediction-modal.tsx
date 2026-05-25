@@ -301,10 +301,9 @@ export function AIPredictionModal({ open, onOpenChange, onComplete }: AIPredicti
               </p>
               <div className="grid grid-cols-2 gap-4 mt-2">
                 <div>
-                  <p className="font-medium text-blue-600 dark:text-blue-400 mb-2 border-b pb-1">날씨 (수요 감소)</p>
+                  <p className="font-medium text-blue-600 dark:text-blue-400 mb-2 border-b pb-1">수요 감소 요인</p>
                   <ul className="space-y-1 text-xs">
                     <li className="flex justify-between"><span>우박:</span> <span className="text-destructive font-mono">-30%</span></li>
-                    <li className="flex justify-between"><span>폭염:</span> <span className="text-destructive font-mono">-20%</span></li>
                     <li className="flex justify-between"><span>눈:</span> <span className="text-destructive font-mono">-15%</span></li>
                     <li className="flex justify-between"><span>비:</span> <span className="text-destructive font-mono">-10%</span></li>
                     <li className="flex justify-between"><span>황사:</span> <span className="text-destructive font-mono">-10%</span></li>
@@ -312,10 +311,11 @@ export function AIPredictionModal({ open, onOpenChange, onComplete }: AIPredicti
                   </ul>
                 </div>
                 <div>
-                  <p className="font-medium text-green-600 dark:text-green-400 mb-2 border-b pb-1">행사 (수요 증가)</p>
+                  <p className="font-medium text-green-600 dark:text-green-400 mb-2 border-b pb-1">수요 증가 요인</p>
                   <ul className="space-y-1 text-xs">
                     <li className="flex justify-between"><span>지역 축제:</span> <span className="text-green-600 font-mono">+30%</span></li>
                     <li className="flex justify-between"><span>스포츠 경기:</span> <span className="text-green-600 font-mono">+25%</span></li>
+                    <li className="flex justify-between"><span>폭염:</span> <span className="text-green-600 font-mono">+20%</span></li>
                     <li className="flex justify-between"><span>콘서트:</span> <span className="text-green-600 font-mono">+20%</span></li>
                     <li className="flex justify-between"><span>전시회:</span> <span className="text-green-600 font-mono">+10%</span></li>
                   </ul>

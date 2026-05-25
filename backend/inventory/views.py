@@ -249,7 +249,7 @@ def predict_future_sales(request):
             if '눈' in weather_list: weight_modifier -= 0.15
             if '우박' in weather_list: weight_modifier -= 0.30
             if '안개' in weather_list: weight_modifier -= 0.05
-            if '폭염' in weather_list: weight_modifier -= 0.20
+            if '폭염' in weather_list: weight_modifier += 0.20
             if '황사' in weather_list: weight_modifier -= 0.10
             
             event_list = payload.get('events', [])
