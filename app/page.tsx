@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import useSWR from "swr"
 import {
   TrendingUp,
@@ -23,7 +24,24 @@ import { AIPredictionModal } from "@/components/ai-prediction-modal"
 import { DownloadReportModal } from "@/components/download-report-modal"
 import { AIPredictionProgress } from "@/components/ai-prediction-progress"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { KOREA_REGIONS, Region } from "@/lib/regions"
+import { MapPin, ChevronsUpDown, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
+
+function getClosestRegion(lat: number, lon: number): Region {
+  let closest = KOREA_REGIONS[0];
+  let minDistance = Number.MAX_VALUE;
+  for (const r of KOREA_REGIONS) {
+    const dist = Math.pow(r.lat - lat, 2) + Math.pow(r.lon - lon, 2);
+    if (dist < minDistance) {
+      minDistance = dist;
+      closest = r;
+    }
+  }
+  return closest;
+}
 import { fetcher } from "@/lib/fetcher"
 import { Area, AreaChart, CartesianGrid, ReferenceLine, XAxis, YAxis } from "recharts"
 import {
@@ -72,6 +90,11 @@ const chartConfig = {
 } satisfies ChartConfig
 
 export default function DashboardPage() {
+  const [region, setRegion] = useState<Region>(
+    KOREA_REGIONS.find(r => r.name === "경상북도 경산시 하양읍") || KOREA_REGIONS[0]
+  )
+  const [openRegion, setOpenRegion] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
   const [isPredictionOpen, setIsPredictionOpen] = useState(false)
   const [isDownloadOpen, setIsDownloadOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
@@ -84,7 +107,11 @@ export default function DashboardPage() {
   })
   const [showDashboard, setShowDashboard] = useState(false)
 
-  const { data, isLoading } = useSWR<DashboardResponse>("/api/dashboard", fetcher)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  const { data, isLoading } = useSWR<DashboardResponse>(`/api/dashboard?region=${region.name}&lat=${region.lat}&lon=${region.lon}`, fetcher)
 
   useEffect(() => {
     if (showDashboard) {
@@ -186,9 +213,74 @@ export default function DashboardPage() {
           mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
         }`}
       >
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">종합 대시보드</h1>
-          <p className="text-muted-foreground">오늘의 핵심 지표를 한눈에 확인하세요</p>
+        <div className="flex items-center gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight md:text-3xl">종합 대시보드</h1>
+            <p className="text-muted-foreground">오늘의 핵심 지표를 한눈에 확인하세요</p>
+          </div>
+          <div className="mt-1 hidden md:block border-l pl-4 border-border">
+            <Popover 
+              open={openRegion} 
+              onOpenChange={(open) => {
+                setOpenRegion(open)
+                if (!open) setSearchQuery("")
+              }}
+            >
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openRegion}
+                  className="w-[200px] justify-between"
+                >
+                  <MapPin className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                  {region.name}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[200px] p-0" align="start">
+                <Command>
+                  <CommandInput 
+                    placeholder="지역 검색..." 
+                    value={searchQuery}
+                    onValueChange={setSearchQuery}
+                  />
+                  <CommandList>
+                    {searchQuery.trim().length > 0 ? (
+                      <>
+                        <CommandEmpty>지역을 찾을 수 없습니다.</CommandEmpty>
+                        <CommandGroup className="max-h-[300px] overflow-y-auto">
+                          {KOREA_REGIONS.filter(r => r.name.replace(/\s+/g, '').includes(searchQuery.replace(/\s+/g, ''))).slice(0, 50).map((r) => (
+                            <CommandItem
+                              key={r.id}
+                              value={r.name}
+                              onSelect={() => {
+                                setRegion(r)
+                                setOpenRegion(false)
+                                setSearchQuery("")
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  region.id === r.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {r.name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </>
+                    ) : (
+                      <div className="py-6 text-center text-sm text-muted-foreground">
+                        검색어를 입력하세요.
+                      </div>
+                    )}
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setIsDownloadOpen(true)}>
@@ -368,9 +460,17 @@ export default function DashboardPage() {
                       <p className="font-medium">{alert.title}</p>
                       <p className="text-sm text-muted-foreground whitespace-pre-wrap">{alert.description}</p>
                       {alert.action && (
-                        <Button variant="link" className="h-auto p-0 text-sm">
-                          {alert.action} <ArrowRight className="ml-1 h-3 w-3" />
-                        </Button>
+                        alert.action === "재고 현황으로 이동" ? (
+                          <Link href="/inventory" passHref>
+                            <Button variant="link" className="h-auto p-0 text-sm">
+                              {alert.action} <ArrowRight className="ml-1 h-3 w-3" />
+                            </Button>
+                          </Link>
+                        ) : (
+                          <Button variant="link" className="h-auto p-0 text-sm">
+                            {alert.action} <ArrowRight className="ml-1 h-3 w-3" />
+                          </Button>
+                        )
                       )}
                     </div>
                   </div>

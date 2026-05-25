@@ -3,7 +3,12 @@ export const dynamic = "force-dynamic";
 import { getStockStatus } from "@/lib/data"
 import { listExpiring, listInventory, listSales, daysAgo, fetchAIPredictions, fetchWeather } from "@/lib/db"
 
-export async function GET() {
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url)
+  const region = searchParams.get("region") || "서울"
+  const lat = searchParams.get("lat")
+  const lon = searchParams.get("lon")
+
   const inventory = await listInventory()
   const sales = await listSales()
   const expiring = await listExpiring()
@@ -127,9 +132,9 @@ export async function GET() {
     });
   }
 
-  let weatherAlertDesc = "내일 기온 상승 예상 (+8°C) - 아이스 음료 수요 증가 예측";
+  let weatherAlertDesc = "";
   try {
-    const weathers = await fetchWeather("서울");
+    const weathers = await fetchWeather(region, lat, lon);
     if (weathers && weathers.length > 0) {
       const tomorrowStr = tomorrowISO.replace(/-/g, "");
       const todayStr = todayISO.replace(/-/g, "");
@@ -137,21 +142,21 @@ export async function GET() {
       const todayW = weathers.find((w: any) => w.base_date === todayStr);
       
       if (tomorrowW && todayW) {
-        const diff = tomorrowW.tmp - todayW.tmp;
-        if (tomorrowW.rn1 > 0) {
-          weatherAlertDesc = `내일 비 예상 (${tomorrowW.rn1}mm) - 배달 및 따뜻한 음료 수요 증가 예측`;
+        const diff = tomorrowW.temperature - todayW.temperature;
+        if (tomorrowW.precipitation > 0) {
+          weatherAlertDesc = `내일 비 예상 (${tomorrowW.precipitation}mm) - 배달 및 따뜻한 음료 수요 증가 예측`;
         } else if (diff > 0) {
           weatherAlertDesc = `내일 기온 상승 예상 (+${diff}°C) - 아이스 음료 수요 증가 예측`;
         } else if (diff < 0) {
           weatherAlertDesc = `내일 기온 하락 예상 (${diff}°C) - 따뜻한 베이커리/음료 준비 필요`;
         } else {
-          weatherAlertDesc = `내일 맑은 날씨 지속 - 평년 수준 수요 예상 (최고 ${tomorrowW.tmp}°C)`;
+          weatherAlertDesc = `내일 맑은 날씨 지속 - 평년 수준 수요 예상 (최고 ${tomorrowW.temperature}°C)`;
         }
       } else if (tomorrowW) {
-        if (tomorrowW.rn1 > 0) {
-          weatherAlertDesc = `내일 비 예상 (${tomorrowW.rn1}mm) - 배달 수요 증가 예측`;
+        if (tomorrowW.precipitation > 0) {
+          weatherAlertDesc = `내일 비 예상 (${tomorrowW.precipitation}mm) - 배달 수요 증가 예측`;
         } else {
-          weatherAlertDesc = `내일 최고기온 ${tomorrowW.tmp}°C - 기온에 맞는 매장 온도 조절 권장`;
+          weatherAlertDesc = `내일 최고기온 ${tomorrowW.temperature}°C - 기온에 맞는 매장 온도 조절 권장`;
         }
       }
     }
@@ -168,12 +173,14 @@ export async function GET() {
       description: `금일 예측 수요(${predictedToday}잔)가 높아 바쁜 하루가 예상됩니다.`,
       action: "인력 배치 확인",
     });
-  } else {
+  }
+  
+  if (weatherAlertDesc) {
     alerts.push({
-      id: 2,
+      id: 3,
       type: "info",
-      time: "오전 07:45",
-      title: "날씨 변화 감지",
+      time: "오전 08:00",
+      title: `날씨 변화 감지 (${region})`,
       description: weatherAlertDesc,
     });
   }

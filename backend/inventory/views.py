@@ -59,12 +59,119 @@ class OrderRecommendationListAPI(generics.ListAPIView):
     queryset = OrderRecommendation.objects.all()
     serializer_class = OrderRecommendationSerializer
 
-# --- 기존 날씨 조회 API ---
+import os
+import requests
+from datetime import datetime, timedelta
+from .kma_grid import lat_lon_to_nx_ny
+
+# --- 신규: 온디맨드 날씨 조회 API ---
 @api_view(['GET'])
 def get_weather(request):
-    target_region = request.GET.get('region', '서울')
-    weathers = Weather.objects.filter(region=target_region).order_by('base_date', 'base_time')
-    serializer = WeatherSerializer(weathers, many=True)
+    lat_str = request.GET.get('lat')
+    lon_str = request.GET.get('lon')
+    region_name = request.GET.get('region', '서울') 
+
+    if lat_str and lon_str:
+        try:
+            lat = float(lat_str)
+            lon = float(lon_str)
+            nx, ny = lat_lon_to_nx_ny(lat, lon)
+            cache_region = f"GRID_{nx}_{ny}"
+        except ValueError:
+            nx, ny = 61, 125 
+            cache_region = region_name
+    else:
+        # Fallback
+        nx, ny = 61, 125
+        cache_region = region_name
+
+    now = datetime.now()
+    base_date = now.strftime('%Y%m%d')
+    base_time = '0500' # 단기예보 새벽 5시 발표 기준 (단순화)
+
+    # 1. 캐싱 확인: 오늘 이후의 날씨 데이터가 해당 격자(GRID)로 존재하는가?
+    existing_weather = Weather.objects.filter(region=cache_region, base_date__gte=base_date).order_by('base_date', 'base_time')
+    
+    # KMA 단기예보는 1시간 단위이므로 내일 데이터까지 충분히 있으려면 최소 24개 이상의 레코드가 있어야 함.
+    if existing_weather.count() >= 24:
+        serializer = WeatherSerializer(existing_weather, many=True)
+        return Response(serializer.data)
+    else:
+        # 불완전한 캐시 삭제
+        existing_weather.delete()
+        
+    # 2. 없으면 기상청 API 실시간 호출
+    url = 'http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst'
+    my_key = os.environ.get('WEATHER_API_KEY')
+    
+    def inject_mock_data():
+        import random
+        Weather.objects.update_or_create(base_date=base_date, base_time=base_time, region=cache_region, defaults={'temperature': random.uniform(15.0, 25.0), 'precipitation': 0.0})
+        tomorrow = (now + timedelta(days=1)).strftime('%Y%m%d')
+        Weather.objects.update_or_create(base_date=tomorrow, base_time=base_time, region=cache_region, defaults={'temperature': random.uniform(15.0, 25.0) + 3, 'precipitation': random.choice([0.0, 0.0, 5.0])})
+
+    if not my_key:
+        print("⚠️ WEATHER_API_KEY가 설정되지 않아 가상(Mock) 날씨 데이터를 캐싱합니다.")
+        inject_mock_data()
+    else:
+        params = {
+            'serviceKey': my_key,
+            'pageNo': '1',
+            'numOfRows': '1000',
+            'dataType': 'JSON',
+            'base_date': base_date,
+            'base_time': base_time,
+            'nx': nx,
+            'ny': ny
+        }
+
+        try:
+            response = requests.get(url, params=params, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                items = data.get('response', {}).get('body', {}).get('items', {}).get('item', [])
+                
+                weather_dict = {}
+                for item in items:
+                    date = item['fcstDate']
+                    time = item['fcstTime']
+                    category = item['category']
+                    value = item['fcstValue']
+                    
+                    key = f"{date}_{time}"
+                    if key not in weather_dict:
+                        weather_dict[key] = {'base_date': date, 'base_time': time, 'tmp': None, 'rn1': 0.0}
+                        
+                    if category == 'TMP':
+                        weather_dict[key]['tmp'] = float(value)
+                    elif category in ['PCP', 'RN1']:
+                        if value == "강수없음":
+                            weather_dict[key]['rn1'] = 0.0
+                        else:
+                            try:
+                                weather_dict[key]['rn1'] = float(value.replace("mm", ""))
+                            except ValueError:
+                                weather_dict[key]['rn1'] = 0.0
+
+                for key, val in weather_dict.items():
+                    if val['tmp'] is not None:
+                        Weather.objects.update_or_create(
+                            base_date=val['base_date'],
+                            base_time=val['base_time'],
+                            region=cache_region,
+                            defaults={
+                                'temperature': val['tmp'],
+                                'precipitation': val['rn1']
+                            }
+                        )
+            else:
+                inject_mock_data()
+        except Exception as e:
+            print("Weather API fetch error:", e)
+            inject_mock_data()
+
+    existing_weather = Weather.objects.filter(region=cache_region, base_date__gte=base_date).order_by('base_date', 'base_time')
+    serializer = WeatherSerializer(existing_weather, many=True)
     return Response(serializer.data)
 
 # --- 기존 매출 통계 API ---

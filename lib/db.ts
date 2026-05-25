@@ -441,8 +441,12 @@ export async function fetchAIPredictions(date: string) {
   }
 }
 
-export async function fetchWeather(region = "서울") {
-  return await fetchAPI(`/weather/?region=${region}`)
+export async function fetchWeather(region = "서울", lat?: string | null, lon?: string | null) {
+  let url = `/weather/?region=${region}`;
+  if (lat && lon) {
+    url += `&lat=${lat}&lon=${lon}`;
+  }
+  return await fetchAPI(url);
 }
 
 export { categories }
