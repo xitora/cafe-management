@@ -366,7 +366,7 @@ export default function DashboardPage() {
                         <span className="text-xs text-muted-foreground">{alert.time}</span>
                       </div>
                       <p className="font-medium">{alert.title}</p>
-                      <p className="text-sm text-muted-foreground">{alert.description}</p>
+                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">{alert.description}</p>
                       {alert.action && (
                         <Button variant="link" className="h-auto p-0 text-sm">
                           {alert.action} <ArrowRight className="ml-1 h-3 w-3" />

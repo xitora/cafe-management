@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 export const dynamic = "force-dynamic";
 import { getStockStatus } from "@/lib/data"
-import { listExpiring, listInventory, listSales, daysAgo, fetchAIPredictions } from "@/lib/db"
+import { listExpiring, listInventory, listSales, daysAgo, fetchAIPredictions, fetchWeather } from "@/lib/db"
 
 export async function GET() {
   const inventory = await listInventory()
@@ -13,6 +13,7 @@ export async function GET() {
 
   const todayISO = daysAgo(0)
   const yesterdayISO = daysAgo(1)
+  const tomorrowISO = daysAgo(-1)
   const last7 = new Set<string>()
   for (let i = 1; i <= 7; i++) last7.add(daysAgo(i))
 
@@ -113,7 +114,7 @@ export async function GET() {
       type: "urgent",
       time: "오전 08:30",
       title: "긴급 발주 필요",
-      description: `${lowStockItems[0].product} 재고 부족 (현재: ${lowStockItems[0].currentStock}${lowStockItems[0].unit})`,
+      description: lowStockItems.map(i => `- ${i.product} (현재: ${i.currentStock}${i.unit})`).join("\n"),
       action: "재고 현황으로 이동",
     });
   } else {
@@ -124,6 +125,38 @@ export async function GET() {
       title: "재고 상태 안정적",
       description: "현재 부족한 재고가 없습니다.",
     });
+  }
+
+  let weatherAlertDesc = "내일 기온 상승 예상 (+8°C) - 아이스 음료 수요 증가 예측";
+  try {
+    const weathers = await fetchWeather("서울");
+    if (weathers && weathers.length > 0) {
+      const tomorrowStr = tomorrowISO.replace(/-/g, "");
+      const todayStr = todayISO.replace(/-/g, "");
+      const tomorrowW = weathers.find((w: any) => w.base_date === tomorrowStr);
+      const todayW = weathers.find((w: any) => w.base_date === todayStr);
+      
+      if (tomorrowW && todayW) {
+        const diff = tomorrowW.tmp - todayW.tmp;
+        if (tomorrowW.rn1 > 0) {
+          weatherAlertDesc = `내일 비 예상 (${tomorrowW.rn1}mm) - 배달 및 따뜻한 음료 수요 증가 예측`;
+        } else if (diff > 0) {
+          weatherAlertDesc = `내일 기온 상승 예상 (+${diff}°C) - 아이스 음료 수요 증가 예측`;
+        } else if (diff < 0) {
+          weatherAlertDesc = `내일 기온 하락 예상 (${diff}°C) - 따뜻한 베이커리/음료 준비 필요`;
+        } else {
+          weatherAlertDesc = `내일 맑은 날씨 지속 - 평년 수준 수요 예상 (최고 ${tomorrowW.tmp}°C)`;
+        }
+      } else if (tomorrowW) {
+        if (tomorrowW.rn1 > 0) {
+          weatherAlertDesc = `내일 비 예상 (${tomorrowW.rn1}mm) - 배달 수요 증가 예측`;
+        } else {
+          weatherAlertDesc = `내일 최고기온 ${tomorrowW.tmp}°C - 기온에 맞는 매장 온도 조절 권장`;
+        }
+      }
+    }
+  } catch (e) {
+    console.error("Weather alert processing error", e);
   }
 
   if (predictedToday > 500) {
@@ -141,7 +174,7 @@ export async function GET() {
       type: "info",
       time: "오전 07:45",
       title: "날씨 변화 감지",
-      description: "내일 기온 상승 예상 (+8°C) - 아이스 음료 수요 증가 예측",
+      description: weatherAlertDesc,
     });
   }
 

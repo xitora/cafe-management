@@ -441,4 +441,8 @@ export async function fetchAIPredictions(date: string) {
   }
 }
 
+export async function fetchWeather(region = "서울") {
+  return await fetchAPI(`/weather/?region=${region}`)
+}
+
 export { categories }
