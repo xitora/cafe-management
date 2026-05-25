@@ -1,4 +1,4 @@
-# ☕ AI 스마트 카페 관리 시스템 (Cafe Management System)
+# ☕ AI 스마트 카페 관리 시스템
 
 <div align="center">
   <a href="https://nextjs.org/" target="_blank"><img src="https://img.shields.io/badge/Next.js-black?style=for-the-badge&logo=next.js&logoColor=white" alt="Next.js" /></a>
