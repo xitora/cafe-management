@@ -227,20 +227,20 @@ export const weeklyData = [
 
 // 14-day forecast data for dashboard (7 days actual + predicted, 7 days predicted only)
 export const forecastData = [
-  { date: "4/7", actual: 285, predicted: 290 },
-  { date: "4/8", actual: 320, predicted: 310 },
-  { date: "4/9", actual: 295, predicted: 305 },
-  { date: "4/10", actual: 340, predicted: 335 },
-  { date: "4/11", actual: 480, predicted: 460 },
-  { date: "4/12", actual: 520, predicted: 530 },
-  { date: "4/13", actual: 390, predicted: 400 },
-  { date: "4/14", actual: null, predicted: 310 },
-  { date: "4/15", actual: null, predicted: 325 },
-  { date: "4/16", actual: null, predicted: 345 },
-  { date: "4/17", actual: null, predicted: 360 },
-  { date: "4/18", actual: null, predicted: 490 },
-  { date: "4/19", actual: null, predicted: 540 },
-  { date: "4/20", actual: null, predicted: 420 },
+  { date: "5/18", actual: 305, predicted: 312 },
+  { date: "5/19", actual: 280, predicted: 275 },
+  { date: "5/20", actual: 340, predicted: 348 },
+  { date: "5/21", actual: 380, predicted: 365 },
+  { date: "5/22", actual: 490, predicted: 495 },
+  { date: "5/23", actual: 620, predicted: 600 },
+  { date: "5/24", actual: 510, predicted: 525 },
+  { date: "5/25", actual: null, predicted: 320 },
+  { date: "5/26", actual: null, predicted: 290 },
+  { date: "5/27", actual: null, predicted: 350 },
+  { date: "5/28", actual: null, predicted: 390 },
+  { date: "5/29", actual: null, predicted: 510 },
+  { date: "5/30", actual: null, predicted: 630 },
+  { date: "5/31", actual: null, predicted: 530 },
 ]
 
 // Monthly accuracy trend data

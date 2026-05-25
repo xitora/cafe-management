@@ -6,9 +6,9 @@ function parseCost(v: string): number {
 }
 
 export async function GET() {
-  const sales = listSales()
-  const orders = listOrders()
-  const waste = listWasteHistory()
+  const sales = await listSales()
+  const orders = await listOrders()
+  const waste = await listWasteHistory()
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -32,35 +32,7 @@ export async function GET() {
   const salesChange =
     lastMonthSales > 0 ? Math.round(((thisMonthSales - lastMonthSales) / lastMonthSales) * 1000) / 10 : 0
 
-  const thisMonthOrders = orders
-    .filter((o) => inRange(o.date, thisMonthStart, today))
-    .reduce((sum, o) => sum + parseCost(o.price), 0)
-  const lastMonthOrders = orders
-    .filter((o) => inRange(o.date, lastMonthStart, lastMonthEnd))
-    .reduce((sum, o) => sum + parseCost(o.price), 0)
-  const ordersChange =
-    lastMonthOrders > 0
-      ? Math.round(((thisMonthOrders - lastMonthOrders) / lastMonthOrders) * 1000) / 10
-      : 0
 
-  const thisMonthWaste = waste
-    .filter((w) => inRange(w.date, thisMonthStart, today))
-    .reduce((sum, w) => sum + parseCost(w.cost), 0)
-  const lastMonthWaste = waste
-    .filter((w) => inRange(w.date, lastMonthStart, lastMonthEnd))
-    .reduce((sum, w) => sum + parseCost(w.cost), 0)
-  const wasteChange =
-    lastMonthWaste > 0 ? Math.round(((thisMonthWaste - lastMonthWaste) / lastMonthWaste) * 1000) / 10 : 0
-
-  const profitMargin =
-    thisMonthSales > 0
-      ? Math.round(((thisMonthSales - thisMonthOrders - thisMonthWaste) / thisMonthSales) * 1000) / 10
-      : 0
-  const lastProfitMargin =
-    lastMonthSales > 0
-      ? Math.round(((lastMonthSales - lastMonthOrders - lastMonthWaste) / lastMonthSales) * 1000) / 10
-      : 0
-  const profitChange = Math.round((profitMargin - lastProfitMargin) * 10) / 10
 
   // ----- 주간 차트 (지난 7일, 일자 라벨) -----
   const weekly: Array<{
@@ -148,35 +120,17 @@ export async function GET() {
     amount: `₩${amount.toLocaleString()}`,
   }))
 
-  // ----- 비용 구성 -----
-  const costData = [
-    { name: "원재료비", pct: 45 },
-    { name: "인건비", pct: 30 },
-    { name: "임대료", pct: 15 },
-    { name: "기타", pct: 10 },
-  ].map((c, i) => ({
-    name: c.name,
-    value: c.pct,
-    amount: `₩${Math.round((thisMonthSales * c.pct) / 100).toLocaleString()}`,
-    color: `bg-chart-${i + 1}`,
-  }))
+
 
   return NextResponse.json({
     stats: {
       totalSales: thisMonthSales,
       totalSalesChangePct: salesChange,
-      totalOrders: thisMonthOrders,
-      totalOrdersChangePct: ordersChange,
-      totalWaste: thisMonthWaste,
-      totalWasteChangePct: wasteChange,
-      profitMargin,
-      profitMarginChangePct: profitChange,
     },
     weekly,
     monthly,
     todayLabel,
     topProducts,
     categoryData,
-    costData,
   })
 }

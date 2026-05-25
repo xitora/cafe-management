@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Progress } from "@/components/ui/progress"
 import { AIPredictionModal } from "@/components/ai-prediction-modal"
+import { DateRangePicker } from "@/components/date-range-picker"
 import { cn } from "@/lib/utils"
 import { fetcher } from "@/lib/fetcher"
 import {
@@ -130,10 +131,7 @@ export default function AccuracyPage() {
           <p className="text-muted-foreground">AI 예측 모델의 성능을 분석합니다</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
-            <Calendar className="mr-2 h-4 w-4" />
-            기간 설정
-          </Button>
+          <DateRangePicker />
           <Button onClick={() => setIsPredictionOpen(true)}>
             <Sparkles className="mr-2 h-4 w-4" />
             새 예측 실행

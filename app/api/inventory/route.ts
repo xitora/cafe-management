@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { createInventoryItem, listInventory } from "@/lib/db"
 
 export async function GET() {
-  return NextResponse.json({ items: listInventory() })
+  return NextResponse.json({ items: await listInventory() })
 }
 
 export async function POST(req: Request) {
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: `Missing field: ${k}` }, { status: 400 })
     }
   }
-  const item = createInventoryItem({
+  const item = await createInventoryItem({
     product: String(body.product),
     category: String(body.category),
     currentStock: Number(body.currentStock),

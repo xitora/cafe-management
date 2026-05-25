@@ -42,9 +42,9 @@ import {
   getStockStatus,
   stockStatusConfig,
   formatCurrency,
-  type InventoryItem,
   type RecommendedOrder,
 } from "@/lib/data"
+import { type InventoryItem } from "@/lib/db"
 import { fetcher } from "@/lib/fetcher"
 
 interface InventoryResponse {
@@ -71,6 +71,7 @@ export default function InventoryPage() {
   const [selectedCategory, setSelectedCategory] = useState("전체")
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [isAddOpen, setIsAddOpen] = useState(false)
+  const [isWasteOpen, setIsWasteOpen] = useState(false)
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -135,6 +136,12 @@ export default function InventoryPage() {
     minStock: 0,
     maxStock: 100,
     dailyUsage: 0,
+  })
+  
+  const [wasteForm, setWasteForm] = useState({
+    productId: 0,
+    quantity: 1,
+    reason: "유통기한 만료",
   })
 
   // 검색/카테고리 필터 후 사용자 정렬 적용. 정렬 미설정 시 기본은 재고비율 오름차순
@@ -224,6 +231,26 @@ export default function InventoryPage() {
     }
   }
 
+  const handleAddWaste = async () => {
+    setIsSubmitting(true)
+    try {
+      await fetch("/api/waste", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(wasteForm),
+      })
+      await mutate()
+      setIsWasteOpen(false)
+      setWasteForm({
+        productId: 0,
+        quantity: 1,
+        reason: "유통기한 만료",
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   const handleAddItem = async () => {
     setIsSubmitting(true)
     try {
@@ -308,11 +335,9 @@ export default function InventoryPage() {
           <p className="text-muted-foreground">실시간 재고 현황을 확인하고 관리합니다</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" asChild>
-            <Link href="/waste">
-              <Trash2 className="mr-2 h-4 w-4" />
-              폐기 관리
-            </Link>
+          <Button variant="outline" onClick={() => setIsWasteOpen(true)}>
+            <Trash2 className="mr-2 h-4 w-4" />
+            폐기 관리
           </Button>
           <Button onClick={() => setIsAddOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
@@ -829,8 +854,74 @@ export default function InventoryPage() {
             <Button variant="outline" onClick={() => setIsAddOpen(false)}>
               취소
             </Button>
-            <Button onClick={handleAddItem} disabled={isSubmitting || !addForm.product}>
+            <Button onClick={handleAddItem} disabled={isSubmitting}>
               {isSubmitting ? "추가 중..." : "추가"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Waste Item Dialog */}
+      <Dialog open={isWasteOpen} onOpenChange={setIsWasteOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>폐기 등록</DialogTitle>
+            <DialogDescription>폐기할 품목과 사유를 입력하세요 (DB 즉시 반영)</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 py-4">
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium">폐기 품목</label>
+              <Select
+                value={String(wasteForm.productId)}
+                onValueChange={(value) => setWasteForm({ ...wasteForm, productId: Number(value) })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="품목 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  {items.map((item) => (
+                    <SelectItem key={item.id} value={String(item.internalProductId)}>
+                      {item.product} (재고: {item.currentStock})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium">폐기 개수</label>
+              <Input
+                type="number"
+                value={wasteForm.quantity}
+                onChange={(e) => setWasteForm({ ...wasteForm, quantity: Number(e.target.value) })}
+                min={1}
+              />
+            </div>
+            
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium">폐기 사유</label>
+              <Select
+                value={wasteForm.reason}
+                onValueChange={(value) => setWasteForm({ ...wasteForm, reason: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="유통기한 만료">유통기한 만료</SelectItem>
+                  <SelectItem value="품질 불량">품질 불량</SelectItem>
+                  <SelectItem value="파손/오염">파손/오염</SelectItem>
+                  <SelectItem value="기타">기타</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsWasteOpen(false)}>
+              취소
+            </Button>
+            <Button onClick={handleAddWaste} disabled={isSubmitting || wasteForm.productId === 0 || wasteForm.quantity < 1}>
+              {isSubmitting ? "처리 중..." : "폐기 처리"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -3,9 +3,9 @@ import { getStockStatus } from "@/lib/data"
 import { listInventory, listOrders, listSuppliers } from "@/lib/db"
 
 export async function GET() {
-  const orders = listOrders()
-  const inventory = listInventory()
-  const suppliers = listSuppliers()
+  const orders = await listOrders()
+  const inventory = await listInventory()
+  const suppliers = await listSuppliers()
 
   // Build recommended orders dynamically from inventory state
   const lowItems = inventory

@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DownloadReportModal } from "@/components/download-report-modal"
+import { DateRangePicker } from "@/components/date-range-picker"
 import { cn } from "@/lib/utils"
 import { fetcher, formatKRW } from "@/lib/fetcher"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Cell, ReferenceLine } from "recharts"
@@ -38,12 +39,6 @@ interface ReportsResponse {
   stats: {
     totalSales: number
     totalSalesChangePct: number
-    totalOrders: number
-    totalOrdersChangePct: number
-    totalWaste: number
-    totalWasteChangePct: number
-    profitMargin: number
-    profitMarginChangePct: number
   }
   weekly: ChartPoint[]
   monthly: ChartPoint[]
@@ -56,7 +51,6 @@ interface ReportsResponse {
     trend: "up" | "down" | "stable"
   }>
   categoryData: Array<{ name: string; value: number; amount: string }>
-  costData: Array<{ name: string; value: number; amount: string; color: string }>
 }
 
 const salesChartConfig = {
@@ -94,27 +88,6 @@ export default function ReportsPage() {
           description: "전월 대비",
           icon: DollarSign,
         },
-        {
-          title: "총 발주액",
-          value: formatKRW(data.stats.totalOrders),
-          ...fmtChange(data.stats.totalOrdersChangePct, true),
-          description: "전월 대비",
-          icon: ShoppingCart,
-        },
-        {
-          title: "폐기 손실",
-          value: formatKRW(data.stats.totalWaste),
-          ...fmtChange(data.stats.totalWasteChangePct, true),
-          description: "전월 대비",
-          icon: Trash2,
-        },
-        {
-          title: "순이익률",
-          value: `${data.stats.profitMargin}%`,
-          ...fmtChange(data.stats.profitMarginChangePct),
-          description: "전월 대비",
-          icon: TrendingUp,
-        },
       ]
     : []
 
@@ -131,10 +104,7 @@ export default function ReportsPage() {
           <p className="text-muted-foreground">매출, 발주, 폐기 현황을 분석합니다</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
-            <Calendar className="mr-2 h-4 w-4" />
-            기간 설정
-          </Button>
+          <DateRangePicker />
           <Button onClick={() => setIsDownloadOpen(true)}>
             <Download className="mr-2 h-4 w-4" />
             리포트 다운로드
@@ -142,9 +112,9 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-1">
         {isLoading || !data
-          ? Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28" />)
+          ? Array.from({ length: 1 }).map((_, i) => <Skeleton key={i} className="h-28" />)
           : stats.map((stat, index) => (
               <Card
                 key={stat.title}
@@ -328,7 +298,7 @@ export default function ReportsPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-1">
         <Card
           className={cn(
             "border card-hover transition-all duration-1000",
@@ -372,41 +342,7 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
 
-        <Card
-          className={cn(
-            "border card-hover transition-all duration-1000",
-            mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4",
-          )}
-          style={{ transitionDelay: "1400ms" }}
-        >
-          <CardHeader>
-            <CardTitle>비용 구성</CardTitle>
-            <CardDescription>이번 달 비용 분포</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col gap-4">
-              {data?.costData.map((category, index) => (
-                <div
-                  key={category.name}
-                  className={cn(
-                    "flex items-center gap-4 transition-all duration-600",
-                    mounted ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4",
-                  )}
-                  style={{ transitionDelay: `${1600 + index * 100}ms` }}
-                >
-                  <div className={cn("h-3 w-3 rounded-full", category.color)} />
-                  <div className="flex-1">
-                    <div className="flex justify-between text-sm">
-                      <span className="font-medium">{category.name}</span>
-                      <span className="text-muted-foreground">{category.value}%</span>
-                    </div>
-                    <p className="text-sm text-muted-foreground">{category.amount}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+
       </div>
 
       <DownloadReportModal open={isDownloadOpen} onOpenChange={setIsDownloadOpen} />

@@ -39,27 +39,63 @@ const reportTypes = [
 ]
 
 const formatTypes = [
-  { id: "pdf", name: "PDF", icon: FileText },
-  { id: "excel", name: "Excel", icon: FileSpreadsheet },
-  { id: "csv", name: "CSV", icon: FileText },
+  { id: "csv", name: "CSV", icon: FileSpreadsheet },
 ]
 
 export function DownloadReportModal({ open, onOpenChange }: DownloadReportModalProps) {
   const [selectedReport, setSelectedReport] = useState<string>("daily")
-  const [selectedFormat, setSelectedFormat] = useState<string>("pdf")
+  const [selectedFormat, setSelectedFormat] = useState<string>("csv")
   const [isDownloading, setIsDownloading] = useState(false)
   const [isComplete, setIsComplete] = useState(false)
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     setIsDownloading(true)
-    setTimeout(() => {
-      setIsDownloading(false)
+    try {
+      const res = await fetch("/api/reports")
+      if (!res.ok) throw new Error("Failed to fetch report data")
+      const data = await res.json()
+      
+      let csvContent = "\uFEFF" // UTF-8 BOM
+      
+      csvContent += "=== 인기 상품 TOP 5 ===\n"
+      csvContent += "순위,상품명,판매량,매출\n"
+      data.topProducts.forEach((p: any) => {
+        csvContent += `${p.rank},${p.name},${p.sales},${p.revenue.replace(/,/g, '')}\n`
+      })
+      
+      csvContent += "\n=== 카테고리별 매출 ===\n"
+      csvContent += "카테고리,비중(%),매출\n"
+      data.categoryData.forEach((c: any) => {
+        csvContent += `${c.name},${c.value},${c.amount.replace(/,/g, '')}\n`
+      })
+
+      const chartData = selectedReport === "monthly" ? data.monthly : data.weekly
+      csvContent += "\n=== 추이 데이터 ===\n"
+      csvContent += "날짜,구분,수치\n"
+      chartData.forEach((d: any) => {
+        csvContent += `${d.date},${d.label},${d.sales}\n`
+      })
+      
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.setAttribute("href", url)
+      link.setAttribute("download", `cafe_report_${selectedReport}_${new Date().toISOString().split('T')[0]}.csv`)
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+
       setIsComplete(true)
       setTimeout(() => {
         onOpenChange(false)
         setIsComplete(false)
       }, 1500)
-    }, 2000)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setIsDownloading(false)
+    }
   }
 
   return (

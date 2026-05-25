@@ -7,7 +7,7 @@ export async function PATCH(
 ) {
   const { id } = await params
   const body = await req.json()
-  const updated = updateInventoryItem(id, body)
+  const updated = await updateInventoryItem(id, body)
   if (!updated) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }
@@ -19,7 +19,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
-  const ok = deleteInventoryItem(id)
+  const ok = await deleteInventoryItem(id)
   if (!ok) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }

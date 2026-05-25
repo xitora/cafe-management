@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { AIPredictionModal } from "@/components/ai-prediction-modal"
 import { DownloadReportModal } from "@/components/download-report-modal"
+import { AIPredictionProgress } from "@/components/ai-prediction-progress"
 import { cn } from "@/lib/utils"
 import { fetcher } from "@/lib/fetcher"
 import { Area, AreaChart, CartesianGrid, ReferenceLine, XAxis, YAxis } from "recharts"
@@ -74,11 +75,59 @@ export default function DashboardPage() {
   const [isDownloadOpen, setIsDownloadOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
 
+  const [initialProgress, setInitialProgress] = useState(0)
+  const [initialStatus, setInitialStatus] = useState({
+    preprocessing: false,
+    patternAnalysis: false,
+    modelApplication: false,
+  })
+  const [showDashboard, setShowDashboard] = useState(false)
+
   const { data, isLoading } = useSWR<DashboardResponse>("/api/dashboard", fetcher)
 
   useEffect(() => {
-    setMounted(true)
-  }, [])
+    if (showDashboard) {
+      // Trigger mount animation after dashboard becomes visible
+      setTimeout(() => setMounted(true), 50)
+    }
+  }, [showDashboard])
+
+  useEffect(() => {
+    // 최초 1회만 실행하도록 세션 스토리지 확인
+    const hasRun = sessionStorage.getItem("dashboardPredictionRun")
+    if (hasRun) {
+      setShowDashboard(true)
+      return
+    }
+
+    if (showDashboard) return
+
+    let isDone = !!data && !isLoading
+    const interval = setInterval(() => {
+      setInitialProgress((prev) => {
+        let next = prev
+        if (!isDone) {
+          if (prev < 90) next = prev + 2
+        } else {
+          if (prev < 100) next = prev + 5
+        }
+
+        if (next >= 30) setInitialStatus((s) => ({ ...s, preprocessing: true }))
+        if (next >= 60) setInitialStatus((s) => ({ ...s, patternAnalysis: true }))
+        if (next >= 100) {
+          setInitialStatus((s) => ({ ...s, modelApplication: true }))
+          clearInterval(interval)
+          sessionStorage.setItem("dashboardPredictionRun", "true")
+          setTimeout(() => {
+            setShowDashboard(true)
+          }, 600)
+        }
+        return next > 100 ? 100 : next
+      })
+    }, 100)
+
+    return () => clearInterval(interval)
+  }, [data, isLoading, showDashboard])
 
   const stats = data
     ? [
@@ -110,6 +159,14 @@ export default function DashboardPage() {
       ]
     : []
 
+  if (!showDashboard) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center">
+        <AIPredictionProgress progress={initialProgress} status={initialStatus} />
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-8">
       <div
@@ -134,19 +191,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        {isLoading || !data
-          ? Array.from({ length: 3 }).map((_, i) => (
-              <Card key={i} className="border">
-                <CardHeader className="pb-2">
-                  <Skeleton className="h-4 w-32" />
-                </CardHeader>
-                <CardContent>
-                  <Skeleton className="h-8 w-24 mb-2" />
-                  <Skeleton className="h-4 w-40" />
-                </CardContent>
-              </Card>
-            ))
-          : stats.map((stat, index) => (
+        {stats.map((stat, index) => (
               <Card
                 key={stat.title}
                 className={cn(
@@ -198,7 +243,7 @@ export default function DashboardPage() {
       >
         <CardHeader>
           <CardTitle>수요 예측</CardTitle>
-            <CardDescription>실제 판매량과 AI 예측 비교 (14일)</CardDescription>
+            <CardDescription>실제 판매량과 AI 예측 비교 (10일)</CardDescription>
           </CardHeader>
           <CardContent>
             {data ? (
