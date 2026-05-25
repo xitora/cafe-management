@@ -23,7 +23,7 @@ interface AIPredictionModalProps {
 
 type Step = "input" | "confirm" | "analyzing" | "complete"
 
-const weatherOptions = ["비", "눈", "우박", "안개", "폭염", "황사"]
+const weatherOptions = ["우박", "안개", "폭염", "황사"]
 const eventOptions = ["지역 축제", "콘서트", "전시회", "스포츠 경기"]
 
 export function AIPredictionModal({ open, onOpenChange }: AIPredictionModalProps) {
@@ -234,6 +234,19 @@ export function AIPredictionModal({ open, onOpenChange }: AIPredictionModalProps
                     <p className="text-sm font-medium">날씨 변화</p>
                     <Badge variant="secondary" className="text-[10px]">기상청 연동 (비/눈 자동)</Badge>
                   </div>
+                  
+                  {/* 자동 감지된 날씨 표시 */}
+                  {(selectedWeather.includes("비") || selectedWeather.includes("눈")) && (
+                    <div className="mb-3 flex gap-2 border-b pb-3 border-border">
+                      {selectedWeather.includes("비") && (
+                        <Badge variant="default" className="bg-blue-500 hover:bg-blue-600 cursor-default">🌧 비 (자동 감지)</Badge>
+                      )}
+                      {selectedWeather.includes("눈") && (
+                        <Badge variant="default" className="bg-sky-400 hover:bg-sky-500 cursor-default">❄️ 눈 (자동 감지)</Badge>
+                      )}
+                    </div>
+                  )}
+
                   <div className="flex flex-wrap gap-2">
                     {weatherOptions.map((option) => (
                       <Button
