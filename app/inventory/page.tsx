@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Progress } from "@/components/ui/progress"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 import {
   categories,
@@ -64,8 +64,10 @@ const urgencyMeta: Record<RecommendedOrder["urgency"], { label: string; tone: st
 export default function InventoryPage() {
   const { data, isLoading, mutate } = useSWR<InventoryResponse>("/api/inventory", fetcher)
   const { data: ordersData } = useSWR<OrdersResponse>("/api/orders", fetcher)
+  const { data: wasteData, mutate: mutateWaste } = useSWR<any>("/api/waste", fetcher)
   const items = data?.items ?? []
   const recommended = ordersData?.recommended ?? []
+  const wasteHistory = wasteData?.history ?? []
 
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("전체")
@@ -239,6 +241,7 @@ export default function InventoryPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(wasteForm),
       })
+      await mutateWaste()
       await mutate()
       setIsWasteOpen(false)
       setWasteForm({
@@ -501,8 +504,8 @@ export default function InventoryPage() {
         <CardHeader>
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <CardTitle>재고 목록</CardTitle>
-              <CardDescription>재고 비율이 낮은 품목부터 표시됩니다</CardDescription>
+              <CardTitle>재고 및 폐기 관리</CardTitle>
+              <CardDescription>재고 현황과 폐기 내역을 조회합니다</CardDescription>
             </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -516,148 +519,212 @@ export default function InventoryPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <Tabs value={selectedCategory} onValueChange={setSelectedCategory} className="mb-4">
-            <TabsList className="flex-wrap h-auto gap-1">
-              {categories.map((category) => (
-                <TabsTrigger key={category} value={category} className="text-sm">
-                  {category}
-                </TabsTrigger>
-              ))}
+          <Tabs defaultValue="inventory" className="w-full">
+            <TabsList className="mb-4">
+              <TabsTrigger value="inventory">재고 목록</TabsTrigger>
+              <TabsTrigger value="waste">폐기 내역</TabsTrigger>
             </TabsList>
-          </Tabs>
+            
+            <TabsContent value="inventory" className="m-0">
+              <Tabs value={selectedCategory} onValueChange={setSelectedCategory} className="mb-4">
+                <TabsList className="flex-wrap h-auto gap-1">
+                  {categories.map((category) => (
+                    <TabsTrigger key={category} value={category} className="text-sm">
+                      {category}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
 
-          <div className="rounded-lg border overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-24">
-                    <Button
-                      variant="ghost"
-                      className="h-auto p-0 font-medium hover:bg-transparent"
-                      onClick={() => handleInvSort("id")}
-                    >
-                      품목코드 <InvSortIcon k="id" />
-                    </Button>
-                  </TableHead>
-                  <TableHead>
-                    <Button
-                      variant="ghost"
-                      className="h-auto p-0 font-medium hover:bg-transparent"
-                      onClick={() => handleInvSort("product")}
-                    >
-                      품목명 <InvSortIcon k="product" />
-                    </Button>
-                  </TableHead>
-                  <TableHead>
-                    <Button
-                      variant="ghost"
-                      className="h-auto p-0 font-medium hover:bg-transparent"
-                      onClick={() => handleInvSort("category")}
-                    >
-                      카테고리 <InvSortIcon k="category" />
-                    </Button>
-                  </TableHead>
-                  <TableHead>
-                    <Button
-                      variant="ghost"
-                      className="h-auto p-0 font-medium hover:bg-transparent"
-                      onClick={() => handleInvSort("currentStock")}
-                    >
-                      현재 재고 <InvSortIcon k="currentStock" />
-                    </Button>
-                  </TableHead>
-                  <TableHead>
-                    <Button
-                      variant="ghost"
-                      className="h-auto p-0 font-medium hover:bg-transparent"
-                      onClick={() => handleInvSort("stockPercent")}
-                    >
-                      재고 상태 <InvSortIcon k="stockPercent" />
-                    </Button>
-                  </TableHead>
-                  <TableHead>
-                    <Button
-                      variant="ghost"
-                      className="h-auto p-0 font-medium hover:bg-transparent"
-                      onClick={() => handleInvSort("unitPrice")}
-                    >
-                      단가 <InvSortIcon k="unitPrice" />
-                    </Button>
-                  </TableHead>
-                  <TableHead>
-                    <Button
-                      variant="ghost"
-                      className="h-auto p-0 font-medium hover:bg-transparent"
-                      onClick={() => handleInvSort("lastUpdated")}
-                    >
-                      최종 업데이트 <InvSortIcon k="lastUpdated" />
-                    </Button>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading
-                  ? Array.from({ length: 8 }).map((_, i) => (
-                      <TableRow key={i}>
-                        <TableCell colSpan={7}>
-                          <Skeleton className="h-6 w-full" />
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  : filteredItems.map((item, index) => {
-                      const stockStatus = getStockStatus(item)
-                      const stockPercent = getStockLevelPercent(item)
-                      const status = stockStatusConfig[stockStatus]
-                      return (
-                        <TableRow
-                          key={item.id}
-                          className={cn(
-                            "cursor-pointer hover:bg-muted/50 transition-all duration-600",
-                            mounted ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4",
-                          )}
-                          style={{ transitionDelay: `${1000 + index * 30}ms` }}
-                          onClick={() => handleEditClick(item)}
+              <div className="rounded-lg border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-24">
+                        <Button
+                          variant="ghost"
+                          className="h-auto p-0 font-medium hover:bg-transparent"
+                          onClick={() => handleInvSort("id")}
                         >
-                          <TableCell className="font-mono text-sm">{item.id}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">{item.product}</span>
-                              {stockStatus === "low" && (
-                                <AlertTriangle className="h-4 w-4 text-destructive" />
+                          품목코드 <InvSortIcon k="id" />
+                        </Button>
+                      </TableHead>
+                      <TableHead>
+                        <Button
+                          variant="ghost"
+                          className="h-auto p-0 font-medium hover:bg-transparent"
+                          onClick={() => handleInvSort("product")}
+                        >
+                          품목명 <InvSortIcon k="product" />
+                        </Button>
+                      </TableHead>
+                      <TableHead>
+                        <Button
+                          variant="ghost"
+                          className="h-auto p-0 font-medium hover:bg-transparent"
+                          onClick={() => handleInvSort("category")}
+                        >
+                          카테고리 <InvSortIcon k="category" />
+                        </Button>
+                      </TableHead>
+                      <TableHead>
+                        <Button
+                          variant="ghost"
+                          className="h-auto p-0 font-medium hover:bg-transparent"
+                          onClick={() => handleInvSort("currentStock")}
+                        >
+                          현재 재고 <InvSortIcon k="currentStock" />
+                        </Button>
+                      </TableHead>
+                      <TableHead>
+                        <Button
+                          variant="ghost"
+                          className="h-auto p-0 font-medium hover:bg-transparent"
+                          onClick={() => handleInvSort("stockPercent")}
+                        >
+                          재고 상태 <InvSortIcon k="stockPercent" />
+                        </Button>
+                      </TableHead>
+                      <TableHead>
+                        <Button
+                          variant="ghost"
+                          className="h-auto p-0 font-medium hover:bg-transparent"
+                          onClick={() => handleInvSort("unitPrice")}
+                        >
+                          단가 <InvSortIcon k="unitPrice" />
+                        </Button>
+                      </TableHead>
+                      <TableHead>
+                        <Button
+                          variant="ghost"
+                          className="h-auto p-0 font-medium hover:bg-transparent"
+                          onClick={() => handleInvSort("lastUpdated")}
+                        >
+                          최종 업데이트 <InvSortIcon k="lastUpdated" />
+                        </Button>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {isLoading
+                      ? Array.from({ length: 8 }).map((_, i) => (
+                          <TableRow key={i}>
+                            <TableCell colSpan={7}>
+                              <Skeleton className="h-6 w-full" />
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      : filteredItems.map((item, index) => {
+                          const stockStatus = getStockStatus(item)
+                          const stockPercent = getStockLevelPercent(item)
+                          const status = stockStatusConfig[stockStatus]
+                          return (
+                            <TableRow
+                              key={item.id}
+                              className={cn(
+                                "cursor-pointer hover:bg-muted/50 transition-all duration-600",
+                                mounted ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4",
                               )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="secondary">{item.category}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-col gap-1">
-                              <span className="font-medium">
-                                {item.currentStock}
-                                {item.unit} ({stockPercent}%)
-                              </span>
-                              <Progress value={Math.min(stockPercent, 100)} className="h-1.5 w-24" />
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="secondary" className={status.color}>
-                              {stockStatus === "low" && <TrendingDown className="mr-1 h-3 w-3" />}
-                              {stockStatus === "high" && <TrendingUp className="mr-1 h-3 w-3" />}
-                              {status.label}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {formatCurrency(item.unitPrice)}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">{item.lastUpdated}</TableCell>
-                        </TableRow>
-                      )
-                    })}
-              </TableBody>
-            </Table>
-          </div>
+                              style={{ transitionDelay: `${1000 + index * 30}ms` }}
+                              onClick={() => handleEditClick(item)}
+                            >
+                              <TableCell className="font-mono text-sm">{item.id}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium">{item.product}</span>
+                                  {stockStatus === "low" && (
+                                    <AlertTriangle className="h-4 w-4 text-destructive" />
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="secondary">{item.category}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex flex-col gap-1">
+                                  <span className="font-medium">
+                                    {item.currentStock}
+                                    {item.unit} ({stockPercent}%)
+                                  </span>
+                                  <Progress value={Math.min(stockPercent, 100)} className="h-1.5 w-24" />
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="secondary" className={status.color}>
+                                  {stockStatus === "low" && <TrendingDown className="mr-1 h-3 w-3" />}
+                                  {stockStatus === "high" && <TrendingUp className="mr-1 h-3 w-3" />}
+                                  {status.label}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {formatCurrency(item.unitPrice)}
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">{item.lastUpdated}</TableCell>
+                            </TableRow>
+                          )
+                        })}
+                  </TableBody>
+                </Table>
+              </div>
 
-          <p className="mt-4 text-sm text-muted-foreground">총 {filteredItems.length}개 품목</p>
+              <p className="mt-4 text-sm text-muted-foreground">총 {filteredItems.length}개 품목</p>
+            </TabsContent>
+            
+            <TabsContent value="waste" className="m-0">
+              <div className="rounded-lg border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>폐기코드</TableHead>
+                      <TableHead>날짜</TableHead>
+                      <TableHead>품목명</TableHead>
+                      <TableHead>카테고리</TableHead>
+                      <TableHead>수량</TableHead>
+                      <TableHead>폐기사유</TableHead>
+                      <TableHead>손실금액</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {!wasteData
+                      ? Array.from({ length: 5 }).map((_, i) => (
+                          <TableRow key={i}>
+                            <TableCell colSpan={7}>
+                              <Skeleton className="h-6 w-full" />
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      : wasteHistory.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                            폐기 내역이 없습니다.
+                          </TableCell>
+                        </TableRow>
+                      ) : wasteHistory.map((waste: any, index: number) => (
+                          <TableRow
+                            key={waste.id}
+                            className={cn(
+                              "transition-all duration-600",
+                              mounted ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4",
+                            )}
+                            style={{ transitionDelay: `${200 + index * 30}ms` }}
+                          >
+                            <TableCell className="font-mono text-sm">{waste.id}</TableCell>
+                            <TableCell>{waste.date}</TableCell>
+                            <TableCell className="font-medium">{waste.product}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{waste.category}</Badge>
+                            </TableCell>
+                            <TableCell>{waste.quantity}개</TableCell>
+                            <TableCell>{waste.reason}</TableCell>
+                            <TableCell className="text-destructive font-medium">{formatCurrency(waste.loss)}</TableCell>
+                          </TableRow>
+                        ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <p className="mt-4 text-sm text-muted-foreground">총 {wasteHistory.length}건의 폐기 내역</p>
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 

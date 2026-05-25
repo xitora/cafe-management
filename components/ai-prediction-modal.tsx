@@ -22,7 +22,7 @@ interface AIPredictionModalProps {
 
 type Step = "input" | "confirm" | "analyzing" | "complete"
 
-const weatherOptions = ["비", "눈", "우박", "안개"]
+const weatherOptions = ["비", "눈", "우박", "안개", "폭염", "황사"]
 const eventOptions = ["지역 축제", "콘서트", "전시회", "스포츠 경기"]
 
 export function AIPredictionModal({ open, onOpenChange }: AIPredictionModalProps) {
@@ -113,7 +113,6 @@ export function AIPredictionModal({ open, onOpenChange }: AIPredictionModalProps
               const data = JSON.parse(line.substring(6))
               
               if (data.type === "progress") {
-                setProgress(data.percent)
                 if (data.percent >= 10) setAnalysisStatus((s) => ({ ...s, preprocessing: true }))
                 if (data.percent >= 40) setAnalysisStatus((s) => ({ ...s, patternAnalysis: true }))
                 if (data.percent >= 70) setAnalysisStatus((s) => ({ ...s, modelApplication: true }))
@@ -138,6 +137,22 @@ export function AIPredictionModal({ open, onOpenChange }: AIPredictionModalProps
     }
   }
 
+  // 부드러운 가짜 진행도 (최초 로딩과 동일)
+  useEffect(() => {
+    let interval: NodeJS.Timeout
+    if (step === "analyzing") {
+      interval = setInterval(() => {
+        setProgress((prev) => {
+          const next = prev + (99 - prev) * 0.025
+          return next > 99 ? 99 : next
+        })
+      }, 200)
+    }
+    return () => {
+      if (interval) clearInterval(interval)
+    }
+  }, [step])
+
   const handleClose = () => {
     onOpenChange(false)
     setTimeout(() => {
@@ -161,6 +176,28 @@ export function AIPredictionModal({ open, onOpenChange }: AIPredictionModalProps
         setStep("input")
         setProgress(0)
       }, 300)
+    } else {
+      // 팝업 열릴 때 날씨 API에서 pty_code 등 불러와 자동 설정
+      fetch("/api/weather?region=경상북도 경산시 하양읍")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && Array.isArray(data)) {
+            // 오늘~내일 기준 pty_code 파악 (비=1, 눈=3 등)
+            let willRain = false
+            let willSnow = false
+            data.forEach((w: any) => {
+              if (w.pty_code === 1 || w.pty_code === 2 || w.pty_code === 4) willRain = true
+              if (w.pty_code === 2 || w.pty_code === 3) willSnow = true
+            })
+            
+            const autoSelected = []
+            if (willRain) autoSelected.push("비")
+            if (willSnow) autoSelected.push("눈")
+            
+            setSelectedWeather((prev) => Array.from(new Set([...prev, ...autoSelected])))
+          }
+        })
+        .catch((err) => console.error("날씨 연동 실패", err))
     }
   }, [open])
 
@@ -169,63 +206,100 @@ export function AIPredictionModal({ open, onOpenChange }: AIPredictionModalProps
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md overflow-hidden max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
         <DialogHeader className="animate-fade-in-up">
-          <DialogTitle className="text-xl">AI 예측 모델 실행</DialogTitle>
+          <DialogTitle className="text-xl">AI 예측 모델 실행 (3일 기준)</DialogTitle>
           <DialogDescription>
-            AI 모델을 사용하여 미래 수요를 예측합니다
+            기상청 날씨 데이터 및 수동 선택한 외생 변수들을 결합하여 향후 3일간의 수요를 예측합니다.
           </DialogDescription>
         </DialogHeader>
 
         {step === "input" && (
-          <div className="flex flex-col gap-6 animate-fade-in-up">
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">분석 기준일 선택</label>
-              <div className="flex items-center gap-2 rounded-lg border px-3 py-2.5">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm">{formattedDate}</span>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">외부 변수 선택</label>
-
-              <div className="rounded-lg border p-4">
-                <p className="mb-3 text-sm font-medium">날씨 변화</p>
-                <div className="flex flex-wrap gap-2">
-                  {weatherOptions.map((option) => (
-                    <Button
-                      key={option}
-                      variant={selectedWeather.includes(option) ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => toggleOption(option, selectedWeather, setSelectedWeather)}
-                    >
-                      {option}
-                    </Button>
-                  ))}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in-up">
+            <div className="flex flex-col gap-6">
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium">분석 기준일 선택</label>
+                <div className="flex items-center gap-2 rounded-lg border px-3 py-2.5">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">{formattedDate}</span>
                 </div>
               </div>
 
-              <div className="rounded-lg border p-4">
-                <p className="mb-3 text-sm font-medium">주변 행사</p>
-                <div className="flex flex-wrap gap-2">
-                  {eventOptions.map((option) => (
-                    <Button
-                      key={option}
-                      variant={selectedEvents.includes(option) ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => toggleOption(option, selectedEvents, setSelectedEvents)}
-                    >
-                      {option}
-                    </Button>
-                  ))}
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium">외부 변수 선택</label>
+
+                <div className="rounded-lg border p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm font-medium">날씨 변화</p>
+                    <Badge variant="secondary" className="text-[10px]">기상청 연동 (비/눈 자동)</Badge>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {weatherOptions.map((option) => (
+                      <Button
+                        key={option}
+                        variant={selectedWeather.includes(option) ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => toggleOption(option, selectedWeather, setSelectedWeather)}
+                      >
+                        {option}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-lg border p-4">
+                  <p className="mb-3 text-sm font-medium">주변 행사</p>
+                  <div className="flex flex-wrap gap-2">
+                    {eventOptions.map((option) => (
+                      <Button
+                        key={option}
+                        variant={selectedEvents.includes(option) ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => toggleOption(option, selectedEvents, setSelectedEvents)}
+                      >
+                        {option}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <Button onClick={handleNextStep} className="w-full" disabled={!canProceed}>
+                다음 단계
+              </Button>
+            </div>
+            
+            {/* 가중치 설명표 */}
+            <div className="rounded-lg border bg-muted/30 p-4 text-sm flex flex-col gap-3">
+              <h4 className="font-semibold flex items-center gap-2">
+                <Info className="h-4 w-4" /> 외생 변수 가중치 안내
+              </h4>
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                선택된 외생 변수들은 AI의 기본 예측치(Q50)에 아래 비율만큼 복합적으로 합산되어 최종 권장 발주량에 영향을 미칩니다.
+              </p>
+              <div className="grid grid-cols-2 gap-4 mt-2">
+                <div>
+                  <p className="font-medium text-blue-600 dark:text-blue-400 mb-2 border-b pb-1">날씨 (수요 감소)</p>
+                  <ul className="space-y-1 text-xs">
+                    <li className="flex justify-between"><span>우박:</span> <span className="text-destructive font-mono">-30%</span></li>
+                    <li className="flex justify-between"><span>폭염:</span> <span className="text-destructive font-mono">-20%</span></li>
+                    <li className="flex justify-between"><span>눈:</span> <span className="text-destructive font-mono">-15%</span></li>
+                    <li className="flex justify-between"><span>비:</span> <span className="text-destructive font-mono">-10%</span></li>
+                    <li className="flex justify-between"><span>황사:</span> <span className="text-destructive font-mono">-10%</span></li>
+                    <li className="flex justify-between"><span>안개:</span> <span className="text-destructive font-mono">-5%</span></li>
+                  </ul>
+                </div>
+                <div>
+                  <p className="font-medium text-green-600 dark:text-green-400 mb-2 border-b pb-1">행사 (수요 증가)</p>
+                  <ul className="space-y-1 text-xs">
+                    <li className="flex justify-between"><span>지역 축제:</span> <span className="text-green-600 font-mono">+30%</span></li>
+                    <li className="flex justify-between"><span>스포츠 경기:</span> <span className="text-green-600 font-mono">+25%</span></li>
+                    <li className="flex justify-between"><span>콘서트:</span> <span className="text-green-600 font-mono">+20%</span></li>
+                    <li className="flex justify-between"><span>전시회:</span> <span className="text-green-600 font-mono">+10%</span></li>
+                  </ul>
                 </div>
               </div>
             </div>
-
-            <Button onClick={handleNextStep} className="w-full" disabled={!canProceed}>
-              다음 단계
-            </Button>
           </div>
         )}
 
@@ -293,7 +367,7 @@ export function AIPredictionModal({ open, onOpenChange }: AIPredictionModalProps
               )}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm text-muted-foreground">7일 총 예측 (음료)</p>
+                  <p className="text-sm text-muted-foreground">3일 총 예측 (음료)</p>
                   <p className="text-2xl font-bold">
                     {predictionResult?.results
                       ? Math.round(

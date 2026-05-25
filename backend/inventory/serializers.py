@@ -36,4 +36,4 @@ class WeatherSerializer(serializers.ModelSerializer):
     class Meta:
         model = Weather
         # 프론트엔드에 보내줄 데이터 항목들만 쏙쏙 고르기
-        fields = ['region', 'base_date', 'base_time', 'temperature', 'precipitation']
+        fields = ['region', 'base_date', 'base_time', 'temperature', 'precipitation', 'pty_code']

@@ -106,9 +106,9 @@ def get_weather(request):
     
     def inject_mock_data():
         import random
-        Weather.objects.update_or_create(base_date=base_date, base_time=base_time, region=cache_region, defaults={'temperature': random.uniform(15.0, 25.0), 'precipitation': 0.0})
+        Weather.objects.update_or_create(base_date=base_date, base_time=base_time, region=cache_region, defaults={'temperature': random.uniform(15.0, 25.0), 'precipitation': 0.0, 'pty_code': 0})
         tomorrow = (now + timedelta(days=1)).strftime('%Y%m%d')
-        Weather.objects.update_or_create(base_date=tomorrow, base_time=base_time, region=cache_region, defaults={'temperature': random.uniform(15.0, 25.0) + 3, 'precipitation': random.choice([0.0, 0.0, 5.0])})
+        Weather.objects.update_or_create(base_date=tomorrow, base_time=base_time, region=cache_region, defaults={'temperature': random.uniform(15.0, 25.0) + 3, 'precipitation': random.choice([0.0, 0.0, 5.0]), 'pty_code': random.choice([0, 1, 3])})
 
     if not my_key:
         print("⚠️ WEATHER_API_KEY가 설정되지 않아 가상(Mock) 날씨 데이터를 캐싱합니다.")
@@ -140,7 +140,7 @@ def get_weather(request):
                     
                     key = f"{date}_{time}"
                     if key not in weather_dict:
-                        weather_dict[key] = {'base_date': date, 'base_time': time, 'tmp': None, 'rn1': 0.0}
+                        weather_dict[key] = {'base_date': date, 'base_time': time, 'tmp': None, 'rn1': 0.0, 'pty': 0}
                         
                     if category == 'TMP':
                         weather_dict[key]['tmp'] = float(value)
@@ -152,6 +152,11 @@ def get_weather(request):
                                 weather_dict[key]['rn1'] = float(value.replace("mm", ""))
                             except ValueError:
                                 weather_dict[key]['rn1'] = 0.0
+                    elif category == 'PTY':
+                        try:
+                            weather_dict[key]['pty'] = int(value)
+                        except ValueError:
+                            weather_dict[key]['pty'] = 0
 
                 for key, val in weather_dict.items():
                     if val['tmp'] is not None:
@@ -161,7 +166,8 @@ def get_weather(request):
                             region=cache_region,
                             defaults={
                                 'temperature': val['tmp'],
-                                'precipitation': val['rn1']
+                                'precipitation': val['rn1'],
+                                'pty_code': val['pty']
                             }
                         )
             else:
@@ -210,7 +216,9 @@ def predict_future_sales(request):
     q = queue.Queue()
 
     def progress_callback(percent, status_msg):
+        import time
         q.put({"type": "progress", "percent": percent, "status": status_msg})
+        time.sleep(1.5) # AI 예측에 시간이 3배 더 걸리는 것을 시뮬레이션
         
     def run_ai():
         try:
@@ -233,7 +241,24 @@ def predict_future_sales(request):
             base_date_obj = datetime.strptime(target_date, "%Y-%m-%d")
 
             real_results = []
-            for i in range(7):
+            
+            weight_modifier = 0.0
+            
+            weather_list = payload.get('weather', [])
+            if '비' in weather_list: weight_modifier -= 0.10
+            if '눈' in weather_list: weight_modifier -= 0.15
+            if '우박' in weather_list: weight_modifier -= 0.30
+            if '안개' in weather_list: weight_modifier -= 0.05
+            if '폭염' in weather_list: weight_modifier -= 0.20
+            if '황사' in weather_list: weight_modifier -= 0.10
+            
+            event_list = payload.get('events', [])
+            if '지역 축제' in event_list: weight_modifier += 0.30
+            if '스포츠 경기' in event_list: weight_modifier += 0.25
+            if '콘서트' in event_list: weight_modifier += 0.20
+            if '전시회' in event_list: weight_modifier += 0.10
+            
+            for i in range(3):
                 curr_date = base_date_obj + timedelta(days=i)
                 curr_date_str = curr_date.strftime("%Y-%m-%d")
                 
@@ -243,6 +268,10 @@ def predict_future_sales(request):
                 elif day_of_week == 6: multiplier = 1.4
                 elif day_of_week == 0: multiplier = 0.9
                 elif day_of_week == 4: multiplier = 1.1
+                
+                # 가중치 반영 (1.0 + weight_modifier)
+                final_multiplier = multiplier * (1.0 + weight_modifier)
+                if final_multiplier < 0.1: final_multiplier = 0.1 # 최소 하한선 10%
                 
                 for _, row in recommendations_df.iterrows():
                     import random
@@ -254,8 +283,8 @@ def predict_future_sales(request):
                     real_results.append({
                         "date": curr_date_str,
                         "item_id": str(row.get('item_id', 'unknown')),
-                        "q50_daily": round(base_q50 * multiplier * noise, 2),
-                        "q95_daily": round(base_q95 * multiplier * noise, 2),
+                        "q50_daily": round(base_q50 * final_multiplier * noise, 2),
+                        "q95_daily": round(base_q95 * final_multiplier * noise, 2),
                         "protection_days": int(row.get('protection_days', 4)),
                         "target_stock": round(float(row.get('target_stock', 0)), 2),
                         "recommended_order_qty": int(row.get('recommended_order_qty', 0)) if i == 0 else 0

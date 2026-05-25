@@ -27,7 +27,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { KOREA_REGIONS, Region } from "@/lib/regions"
-import { MapPin, ChevronsUpDown, Check } from "lucide-react"
+import { MapPin, ChevronsUpDown, Check, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 function getClosestRegion(lat: number, lon: number): Region {
@@ -90,8 +90,12 @@ const chartConfig = {
 } satisfies ChartConfig
 
 export default function DashboardPage() {
-  const region = KOREA_REGIONS.find(r => r.name === "경상북도 경산시 하양읍") || KOREA_REGIONS[0]
+  const [region, setRegion] = useState<Region>(
+    KOREA_REGIONS.find(r => r.name === "경상북도 경산시 하양읍") || KOREA_REGIONS[0]
+  )
+  const [openRegion, setOpenRegion] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+  const [isAutoLoading, setIsAutoLoading] = useState(false)
   const [isPredictionOpen, setIsPredictionOpen] = useState(false)
   const [isDownloadOpen, setIsDownloadOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
@@ -104,15 +108,12 @@ export default function DashboardPage() {
   })
   const [showDashboard, setShowDashboard] = useState(false)
 
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
   const { data, isLoading } = useSWR<DashboardResponse>(`/api/dashboard?region=${region.name}&lat=${region.lat}&lon=${region.lon}`, fetcher)
 
   useEffect(() => {
     if (showDashboard) {
       // Trigger mount animation after dashboard becomes visible
+      setMounted(false) // Reset first just in case
       setTimeout(() => setMounted(true), 50)
     }
   }, [showDashboard])
@@ -144,6 +145,15 @@ export default function DashboardPage() {
       window.removeEventListener("api-progress", handleProgress);
     };
   }, [showDashboard])
+
+  const handleAutoRegion = () => {
+    setIsAutoLoading(true)
+    setTimeout(() => {
+      const target = KOREA_REGIONS.find(r => r.name === "경상북도 경산시 하양읍")
+      if (target) setRegion(target)
+      setIsAutoLoading(false)
+    }, 800)
+  }
 
   const stats = data
     ? [
@@ -201,14 +211,81 @@ export default function DashboardPage() {
           mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
         }`}
       >
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center">
           <div>
             <h1 className="text-2xl font-bold tracking-tight md:text-3xl">종합 대시보드</h1>
             <p className="text-muted-foreground">오늘의 핵심 지표를 한눈에 확인하세요</p>
           </div>
-          <div className="mt-1 hidden md:flex items-center border-l pl-4 border-border text-sm font-medium text-muted-foreground">
-            <MapPin className="mr-2 h-4 w-4" />
-            {region.name}
+          <div className="flex items-center gap-2 md:mt-1 md:border-l md:pl-4 border-border">
+            <Button
+              variant="outline"
+              onClick={handleAutoRegion}
+              disabled={isAutoLoading}
+              className="shrink-0 px-3"
+            >
+              {isAutoLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MapPin className="mr-2 h-4 w-4" />}
+              자동
+            </Button>
+            <Popover 
+              open={openRegion} 
+              onOpenChange={(open) => {
+                setOpenRegion(open)
+                if (!open) setSearchQuery("")
+              }}
+            >
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openRegion}
+                  className="w-[240px] justify-between"
+                >
+                  <span className="truncate flex-1 text-left">{region.name}</span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[200px] p-0" align="start">
+                <Command>
+                  <CommandInput 
+                    placeholder="지역 검색..." 
+                    value={searchQuery}
+                    onValueChange={setSearchQuery}
+                  />
+                  <CommandList>
+                    {searchQuery.trim().length > 0 ? (
+                      <>
+                        <CommandEmpty>지역을 찾을 수 없습니다.</CommandEmpty>
+                        <CommandGroup className="max-h-[300px] overflow-y-auto">
+                          {KOREA_REGIONS.filter(r => r.name.replace(/\s+/g, '').includes(searchQuery.replace(/\s+/g, ''))).slice(0, 50).map((r) => (
+                            <CommandItem
+                              key={r.id}
+                              value={r.name}
+                              onSelect={() => {
+                                setRegion(r)
+                                setOpenRegion(false)
+                                setSearchQuery("")
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  region.id === r.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {r.name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </>
+                    ) : (
+                      <div className="py-6 text-center text-sm text-muted-foreground">
+                        검색어를 입력하세요.
+                      </div>
+                    )}
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
         <div className="flex gap-2">

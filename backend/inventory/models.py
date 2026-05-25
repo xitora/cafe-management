@@ -138,6 +138,7 @@ class Weather(models.Model):
     base_time = models.CharField(max_length=4, verbose_name="예보시간")
     temperature = models.FloatField(verbose_name="온도(℃)", null=True, blank=True)
     precipitation = models.FloatField(verbose_name="강수량(mm)", null=True, blank=True)
+    pty_code = models.IntegerField(default=0, verbose_name="강수형태(PTY)")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

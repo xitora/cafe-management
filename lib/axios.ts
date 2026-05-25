@@ -15,9 +15,9 @@ apiClient.interceptors.request.use((config) => {
       if (intervalId) clearInterval(intervalId);
       
       intervalId = setInterval(() => {
-        // 부드럽게 증가하되 90%에서 멈춤
-        currentProgress += (90 - currentProgress) * 0.15;
-        if (currentProgress > 90) currentProgress = 90;
+        // 부드럽게 증가하되 99%에서 멈춤 (2배 더 느리게 0.025)
+        currentProgress += (99 - currentProgress) * 0.025;
+        if (currentProgress > 99) currentProgress = 99;
         window.dispatchEvent(
           new CustomEvent("api-progress", { detail: { progress: Math.round(currentProgress) } })
         );
