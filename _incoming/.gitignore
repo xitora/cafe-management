@@ -1,0 +1,25 @@
+# Common ignores
+node_modules
+.next/
+.env*.local
+.DS_Store
+
+venv/
+__pycache__/
+*.pyc
+db.sqlite3
+.vscode/
+.env
+
+
+*.csv           # AI 학습용 샘플 데이터 (깃허브 용량 초과 방지)
+*.pkl           # 저장된 AI 모델 파일 (피클 파일)
+*.joblib        # 가끔 sklearn 모델 저장 시 사용됨
+
+
+*.log           # 서버 로그 파일
+media/          # 나중에 이미지 업로드 기능을 만든다면 필요
+
+
+.DS_Store
+Thumbs.db

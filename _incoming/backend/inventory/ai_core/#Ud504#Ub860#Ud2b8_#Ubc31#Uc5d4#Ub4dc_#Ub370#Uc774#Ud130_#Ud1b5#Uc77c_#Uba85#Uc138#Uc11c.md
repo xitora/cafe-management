@@ -1,0 +1,99 @@
+#  프론트엔드 - 백엔드 - AI 모델 데이터 연동 명세서 (API Schema)
+
+
+
+---
+
+## 1.  [Request] 프론트엔드 ➡️ AI 모델 (입력/요청 데이터)
+
+사용자(점주)가 프론트엔드 화면에서 내일의 발주를 받기 위해 입력하거나, 백엔드 DB에서 긁어서 AI 모델로 넘겨주어야 하는 필수 데이터 규격입니다.
+
+| 통일 변수명(Column) | 데이터 타입 | 필수여부 | 설명 (프론트엔드 표시/입력 명칭) | 예시 값 |
+| :--- | :--- | :---: | :--- | :--- |
+| `date` | String (YYYY-MM-DD) | O | 예측 대상 날짜 (내일) | `"2026-04-07"` |
+| `item_id` | String | O | 상품 고유 식별자 (영어 소문자 권장) | `"americano"` |
+| `current_inventory` | Integer | O | 매장 내 현재 잔여 재고량 | `119` |
+| `temp_c` | Float | O | 내일의 예상 기온 (섭씨) | `22.5` |
+| `rain_mm` | Float | O | 내일의 예상 강수량 (mm) | `0.0` |
+| `is_holiday` | Integer (0 or 1) | O | 공휴일 여부 (0: 평일, 1: 휴일) | `0` |
+| `promo` | Integer (0 or 1) | O | 매장 자체 프로모션 진행 여부 | `1` |
+| `nearby_event` | Integer (0~3) | X(선택) | 인근 행사 규모 (0:없음, 3:대규모) | `2` |
+
+*(참고: `moq`, `lead_time_days`, `unit_margin` 등은 백엔드 DB에 상품 메타데이터로 고정 저장되어 있다고 가정합니다.)*
+
+---
+
+## 2. [Response] AI 모델 ➡️ 프론트엔드 (최종 결과 데이터)
+
+AI 모델이 연산을 마치고 프론트엔드 화면(대시보드)으로 뿌려주는 결과 데이터입니다.
+
+| 통일 변수명(Column) | 데이터 타입 | 프론트엔드 대시보드 화면 매핑 (UI) | 예시 값 |
+| :--- | :--- | :--- | :--- |
+| `date` | String | 날짜 | `"2026-04-07"` |
+| `item_id` | String | 발주 품목명 | `"americano"` |
+| `q50_daily` | Float | **예상 일일 판매량** (보통 이정도 팔립니다) | `169.83` |
+| `q95_daily` | Float | **상위 5% 수요 폭발 대비량** (최대 수요) | `181.19` |
+| `protection_days`| Integer | 발주 방어 기간 (배송 + 다음 발주까지 일수) | `4` |
+| `target_stock` | Float | 목표 총 확보 재고 | `695.98` |
+| `recommended_order_qty`| Integer | **✅ 최종 추천 발주 수량 (메인 UI 강조)** | `580` |
+
+---
+
+## 3.  [Response] AI 예측 근거 데이터 (Feature Importance / XAI)
+
+사장님에게 "왜 이만큼 발주해야 하는지" 이유를 차트나 알림 배너로 보여주기 위한 부가 데이터입니다. 리스트(Array) 형태로 반환됩니다.
+
+| 통일 변수명(Column) | 데이터 타입 | 설명 | 예시 값 |
+| :--- | :--- | :--- | :--- |
+| `feature` | String | 영향을 미친 외생변수 요인명 | `"temp_c"`, `"is_holiday"` |
+| `importance_percentage`| Float | 해당 요인이 예측에 기여한 비중 (%) | `15.82` |
+
+---
+
+## 4.  (개발팀 참고용) 프론트엔드-백엔드 간 REST API JSON Payload 예시
+
+**요청 (Frontend -> Backend POST `/api/v1/predict-order`)**
+```json
+{
+  "date": "2026-04-07",
+  "items": [
+    {
+      "item_id": "americano",
+      "current_inventory": 119
+    }
+  ],
+  "external_factors": {
+    "temp_c": 18.5,
+    "rain_mm": 0.0,
+    "is_holiday": 0,
+    "promo": 1,
+    "nearby_event": 0
+  }
+}
+```
+
+**응답 (Backend -> Frontend HTTP 200 OK)**
+```json
+{
+  "status": "success",
+  "results": [
+    {
+      "date": "2026-04-07",
+      "item_id": "americano",
+      "q50_daily": 169.8,
+      "q95_daily": 181.2,
+      "recommended_order_qty": 580
+    }
+  ],
+  "feature_importance": [
+    {
+      "feature": "temp_c",
+      "importance_percentage": 25.4
+    },
+    {
+      "feature": "is_holiday",
+      "importance_percentage": 10.2
+    }
+  ]
+}
+```
