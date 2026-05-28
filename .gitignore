@@ -23,3 +23,9 @@ media/          # 나중에 이미지 업로드 기능을 만든다면 필요
 
 .DS_Store
 Thumbs.db
+
+# Temp Data and Build files
+tsconfig.tsbuildinfo
+forecasts.json
+sales.json
+search_results.json
