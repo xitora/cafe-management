@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Product, InventoryBatch, SalesHistory, ForecastResult, Weather, WasteHistory, OrderRecommendation
+from .models import Product, InventoryBatch, SalesHistory, ForecastResult, Weather, WasteHistory, OrderRecommendation, PredictionRunLog
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -21,6 +21,11 @@ class SalesHistorySerializer(serializers.ModelSerializer):
 class ForecastResultSerializer(serializers.ModelSerializer):
     class Meta:
         model = ForecastResult
+        fields = '__all__'
+
+class PredictionRunLogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PredictionRunLog
         fields = '__all__'
 
 class WasteHistorySerializer(serializers.ModelSerializer):

@@ -29,6 +29,13 @@ class ForecastResultListAPI(generics.ListAPIView):
     queryset = ForecastResult.objects.all()
     serializer_class = ForecastResultSerializer
 
+from .serializers import PredictionRunLogSerializer
+from .models import PredictionRunLog
+
+class PredictionRunLogListAPI(generics.ListAPIView):
+    queryset = PredictionRunLog.objects.all().order_by('-run_datetime')
+    serializer_class = PredictionRunLogSerializer
+
 class WasteHistoryListAPI(generics.ListCreateAPIView):
     queryset = WasteHistory.objects.all()
     serializer_class = WasteHistorySerializer
@@ -249,7 +256,7 @@ def predict_future_sales(request):
             if '눈' in weather_list: weight_modifier -= 0.15
             if '우박' in weather_list: weight_modifier -= 0.30
             if '안개' in weather_list: weight_modifier -= 0.05
-            if '폭염' in weather_list: weight_modifier -= 0.20
+            if '폭염' in weather_list: weight_modifier += 0.20
             if '황사' in weather_list: weight_modifier -= 0.10
             
             event_list = payload.get('events', [])
@@ -257,8 +264,59 @@ def predict_future_sales(request):
             if '스포츠 경기' in event_list: weight_modifier += 0.25
             if '콘서트' in event_list: weight_modifier += 0.20
             if '전시회' in event_list: weight_modifier += 0.10
+
+            custom_input = payload.get('customInput', '')
+            custom_keywords_matched = []
+            if custom_input:
+                import re
+                if re.search(r'비|소나기|장마|강우', custom_input):
+                    weight_modifier -= 0.10
+                    custom_keywords_matched.append("소나기/비(-10%)")
+                if re.search(r'눈|폭설|함박눈', custom_input):
+                    weight_modifier -= 0.15
+                    custom_keywords_matched.append("폭설/눈(-15%)")
+                if re.search(r'폭염|더위|무더위', custom_input):
+                    weight_modifier += 0.20
+                    custom_keywords_matched.append("폭염(+20%)")
+                if re.search(r'축제|페스티벌|행사', custom_input):
+                    weight_modifier += 0.30
+                    custom_keywords_matched.append("축제(+30%)")
+                if re.search(r'콘서트|공연', custom_input):
+                    weight_modifier += 0.20
+                    custom_keywords_matched.append("공연(+20%)")
+                if re.search(r'우박|태풍', custom_input):
+                    weight_modifier -= 0.30
+                    custom_keywords_matched.append("태풍/악천후(-30%)")
+                if re.search(r'소풍|운동회|체육대회|나들이|마라톤', custom_input):
+                    weight_modifier += 0.15
+                    custom_keywords_matched.append("야외행사(+15%)")
             
-            for i in range(3):
+            # 예측 실행 로그 기록 (PredictionRunLog)
+            try:
+                from .models import PredictionRunLog
+                weather_factors_str = ", ".join(weather_list)
+                event_factors_str = ", ".join(event_list)
+                
+                if custom_keywords_matched:
+                    event_factors_str += (" | " if event_factors_str else "") + "자동인식: " + ", ".join(custom_keywords_matched)
+
+                impact_percent = int(weight_modifier * 100)
+                if impact_percent > 0:
+                    impact_summary_str = f"수요 약 {impact_percent}% 증가 예측"
+                elif impact_percent < 0:
+                    impact_summary_str = f"수요 약 {abs(impact_percent)}% 감소 예측"
+                else:
+                    impact_summary_str = "외생 변수 영향 없음 (평년 수준)"
+                    
+                PredictionRunLog.objects.create(
+                    weather_factors=weather_factors_str,
+                    event_factors=event_factors_str,
+                    impact_summary=impact_summary_str
+                )
+            except Exception as e:
+                print("Failed to save PredictionRunLog:", e)
+            
+            for i in range(-7, 3):
                 curr_date = base_date_obj + timedelta(days=i)
                 curr_date_str = curr_date.strftime("%Y-%m-%d")
                 
@@ -273,22 +331,54 @@ def predict_future_sales(request):
                 final_multiplier = multiplier * (1.0 + weight_modifier)
                 if final_multiplier < 0.1: final_multiplier = 0.1 # 최소 하한선 10%
                 
-                for _, row in recommendations_df.iterrows():
+                from django.db.models import Avg
+                from .models import Product, SalesHistory
+                products = list(Product.objects.all())
+                for product_obj in products:
                     import random
+                    item_id_str = product_obj.name
+                    # 동일 날짜/품목에 대해 항상 동일한 난수 발생 (시드 고정)
+                    random.seed(f"{curr_date_str}_{item_id_str}")
                     noise = random.uniform(0.9, 1.1)
                     
-                    base_q50 = float(row.get('q50_daily', row.get('q50', 0)))
-                    base_q95 = float(row.get('q95_daily', row.get('q95', 0)))
+                    # 최초 생성된 더미 데이터(최근 판매량)를 기반으로 예측값 기준(Base) 산정
+                    avg_qty_dict = SalesHistory.objects.filter(product_name=item_id_str).aggregate(Avg('quantity'))
+                    avg_qty = avg_qty_dict['quantity__avg']
+                    
+                    if avg_qty is None:
+                        base_q50 = 10.0
+                    else:
+                        base_q50 = float(avg_qty)
+                        
+                    base_q95 = base_q50 * 1.5
+                    
+                    q50_daily_val = int(round(base_q50 * final_multiplier * noise))
+                    q95_daily_val = int(round(base_q95 * final_multiplier * noise))
                     
                     real_results.append({
                         "date": curr_date_str,
-                        "item_id": str(row.get('item_id', 'unknown')),
-                        "q50_daily": round(base_q50 * final_multiplier * noise, 2),
-                        "q95_daily": round(base_q95 * final_multiplier * noise, 2),
-                        "protection_days": int(row.get('protection_days', 4)),
-                        "target_stock": round(float(row.get('target_stock', 0)), 2),
-                        "recommended_order_qty": int(row.get('recommended_order_qty', 0)) if i == 0 else 0
+                        "item_id": item_id_str,
+                        "q50_daily": q50_daily_val,
+                        "q95_daily": q95_daily_val,
+                        "protection_days": 4,
+                        "target_stock": q50_daily_val * 4,
+                        "recommended_order_qty": max(0, int(q50_daily_val * 4 - 20)) if i == 0 else 0
                     })
+                    
+                    # DB 저장 로직 (오늘 이후의 날짜만 업데이트!)
+                    try:
+                        from .models import ForecastResult
+                        if i >= 0:
+                            ForecastResult.objects.update_or_create(
+                                target_date=curr_date_str,
+                                product=product_obj,
+                                defaults={
+                                    'predicted_qty': q50_daily_val,
+                                    'forecast_period': 1
+                                }
+                            )
+                    except Exception as e:
+                        print("Failed to save forecast result to DB:", e)
 
             # 4. 📊 예측 근거
             real_feature_importance = []
@@ -329,3 +419,13 @@ def predict_future_sales(request):
                 break
 
     return StreamingHttpResponse(event_stream(), content_type='text/event-stream')
+
+@api_view(['POST'])
+def reset_demo(request):
+    try:
+        from .models import ForecastResult, PredictionRunLog
+        ForecastResult.objects.all().delete()
+        PredictionRunLog.objects.all().delete()
+        return Response({"message": "Reset successful"})
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)

@@ -1,7 +1,6 @@
 // New Database client connected to Django Backend
 
 import {
-  type InventoryItem,
   type Order,
   type WasteHistory,
   type WasteItem,
@@ -395,6 +394,21 @@ export async function listPredictions(): Promise<Prediction[]> {
       status: "warning"
     }
   })
+}
+
+export async function listPredictionLogs() {
+  const logs = await fetchAPI("/prediction-logs/") || []
+  return logs.map((log: any) => ({
+    id: log.id,
+    date: new Date(log.run_datetime).toLocaleString(),
+    type: "수요 예측 실행",
+    predicted: log.impact_summary,
+    actual: "적용 중",
+    accuracy: 0,
+    status: "accurate",
+    weather: log.weather_factors || "선택 안함",
+    events: log.event_factors || "선택 안함",
+  }))
 }
 
 export async function fetchAIPredictions(date: string) {

@@ -40,18 +40,19 @@ def create_dummy_data():
         is_raining = random.random() < 0.2 # 20% 확률로 비가 옴
 
         for product_name, info in CAFE_MENU.items():
-            base_qty = random.randint(10, 30) # 기본적으로 10~30개는 팔림
+            # 사용자 요청: 최초 생성 데이터 10배로 증가
+            base_qty = random.randint(50, 150) # 기본적으로 50~150개는 팔림
             category = info['category']
             
             # 🧠 AI 학습용 가중치 부여 (핵심!)
             if is_summer and category in ['콜드브루/아이스', '스무디/빙수']:
-                base_qty += random.randint(30, 70) # 여름엔 아이스/빙수 대박!
+                base_qty += random.randint(150, 350) # 여름엔 아이스/빙수 대박!
             
             if is_winter and category in ['따뜻한 커피', '논커피/티']:
-                base_qty += random.randint(20, 50) # 겨울엔 따뜻한 음료 짱!
+                base_qty += random.randint(100, 250) # 겨울엔 따뜻한 음료 짱!
                 
             if is_raining and category in ['달콤한 커피', '베이커리/디저트']:
-                base_qty += random.randint(15, 40) # 비 올 땐 디저트 세트 떡상!
+                base_qty += random.randint(70, 200) # 비 올 땐 디저트 세트 떡상!
 
             # 최종 수량 및 가격 계산
             final_qty = base_qty

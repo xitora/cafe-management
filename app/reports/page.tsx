@@ -17,7 +17,6 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DownloadReportModal } from "@/components/download-report-modal"
-import { DateRangePicker } from "@/components/date-range-picker"
 import { cn } from "@/lib/utils"
 import { fetcher, formatKRW } from "@/lib/fetcher"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Cell, ReferenceLine } from "recharts"
@@ -67,7 +66,7 @@ function fmtChange(v: number, invert = false): { text: string; positive: boolean
 export default function ReportsPage() {
   const { data, isLoading } = useSWR<ReportsResponse>("/api/reports", fetcher)
   const [isDownloadOpen, setIsDownloadOpen] = useState(false)
-  const [period, setPeriod] = useState<"weekly" | "monthly">("weekly")
+  const period = "weekly"
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: new Date(2026, 4, 15),
     to: addDays(new Date(2026, 4, 15), 10),
@@ -110,7 +109,6 @@ export default function ReportsPage() {
           <p className="text-muted-foreground">매출, 발주, 폐기 현황을 분석합니다</p>
         </div>
         <div className="flex gap-2">
-          <DateRangePicker date={dateRange} setDate={setDateRange} />
           <Button onClick={() => setIsDownloadOpen(true)}>
             <Download className="mr-2 h-4 w-4" />
             리포트 다운로드
@@ -166,19 +164,9 @@ export default function ReportsPage() {
             <div>
               <CardTitle>매출 추이</CardTitle>
               <CardDescription>
-                {period === "weekly" ? "최근 7일간 일별 판매량" : "최근 30일간 일별 판매량 (월간 흐름)"}
+                최근 7일간 일별 판매량
               </CardDescription>
             </div>
-            <Tabs value={period} onValueChange={(v) => setPeriod(v as "weekly" | "monthly")}>
-              <TabsList className="h-8">
-                <TabsTrigger value="weekly" className="text-xs">
-                  주간
-                </TabsTrigger>
-                <TabsTrigger value="monthly" className="text-xs">
-                  월간
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
           </div>
         </CardHeader>
         <CardContent>

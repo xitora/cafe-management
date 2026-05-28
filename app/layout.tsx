@@ -3,6 +3,7 @@ import { Analytics } from '@vercel/analytics/next'
 import { ThemeProvider } from '@/components/theme-provider'
 import { AppHeader } from '@/components/app-header'
 import { PageTransition } from '@/components/page-transition'
+import { Toaster } from '@/components/ui/toaster'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -64,6 +65,7 @@ export default function RootLayout({
             </main>
           </div>
         </ThemeProvider>
+        <Toaster />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

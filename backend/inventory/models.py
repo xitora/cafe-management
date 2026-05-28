@@ -145,3 +145,12 @@ class Weather(models.Model):
         # 기존: return f"[{self.region}] {self.base_date} {self.base_time} 날씨"
         # 변경: 관리자가 보기 편하게 14시(낮 2시) 예보라는 걸 명시해줍니다!
         return f"[{self.region}] {self.base_date} (낮 2시 기준) 날씨"
+
+class PredictionRunLog(models.Model):
+    run_datetime = models.DateTimeField(auto_now_add=True, verbose_name="실행 일시")
+    weather_factors = models.CharField(max_length=255, blank=True, verbose_name="날씨 변수")
+    event_factors = models.CharField(max_length=255, blank=True, verbose_name="이벤트 변수")
+    impact_summary = models.CharField(max_length=255, verbose_name="영향 요약")
+
+    def __str__(self):
+        return f"[{self.run_datetime.strftime('%Y-%m-%d %H:%M')}] 예측 실행"

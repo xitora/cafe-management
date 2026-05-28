@@ -14,6 +14,7 @@ import {
   AlertCircle,
   Info,
   CloudSun,
+  CheckCircle2,
   type LucideIcon,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -23,12 +24,14 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { AIPredictionModal } from "@/components/ai-prediction-modal"
 import { DownloadReportModal } from "@/components/download-report-modal"
 import { AIPredictionProgress } from "@/components/ai-prediction-progress"
+import { PredictionDetailModal } from "@/components/prediction-detail-modal"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { KOREA_REGIONS, Region } from "@/lib/regions"
 import { MapPin, ChevronsUpDown, Check, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useToast } from "@/hooks/use-toast"
 
 function getClosestRegion(lat: number, lon: number): Region {
   let closest = KOREA_REGIONS[0];
@@ -76,6 +79,7 @@ const alertIconMap: Record<string, LucideIcon> = {
   urgent: AlertTriangle,
   warning: AlertCircle,
   info: CloudSun,
+  success: CheckCircle2,
 }
 
 const chartConfig = {
@@ -99,6 +103,8 @@ export default function DashboardPage() {
   const [isPredictionOpen, setIsPredictionOpen] = useState(false)
   const [isDownloadOpen, setIsDownloadOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [isApplyingEffect, setIsApplyingEffect] = useState(false)
+  const { toast } = useToast()
 
   const [initialProgress, setInitialProgress] = useState(0)
   const [initialStatus, setInitialStatus] = useState({
@@ -107,53 +113,96 @@ export default function DashboardPage() {
     modelApplication: false,
   })
   const [showDashboard, setShowDashboard] = useState(false)
-  const [customPrediction, setCustomPrediction] = useState<any>(null)
+  const [predictionHistory, setPredictionHistory] = useState<any[]>([])
+  const [selectedHistoryItem, setSelectedHistoryItem] = useState<any>(null)
+  const [isDetailOpen, setIsDetailOpen] = useState(false)
 
-  const { data, isLoading } = useSWR<DashboardResponse>(`/api/dashboard?region=${region.name}&lat=${region.lat}&lon=${region.lon}`, fetcher)
+  useEffect(() => {
+    try {
+      const savedHistory = localStorage.getItem("predictionHistory")
+      if (savedHistory) setPredictionHistory(JSON.parse(savedHistory))
+    } catch (e) {
+      console.error("Failed to load from localStorage", e)
+    }
+  }, [])
+
+  const { data, isLoading, mutate } = useSWR<DashboardResponse>(`/api/dashboard?region=${region.name}&lat=${region.lat}&lon=${region.lon}`, fetcher)
 
   const handlePredictionComplete = (result: any) => {
-    if (result && result.results) {
-      setCustomPrediction(result)
+    if (result && result.results && data) {
+      let newPredictedToday = data.stats.predictedToday;
+      const newSums: Record<string, number> = {};
+      result.results.forEach((r: any) => {
+        const parts = r.date.split("-");
+        if (parts.length === 3) {
+          const label = `${parseInt(parts[1])}/${parseInt(parts[2])}`;
+          newSums[label] = (newSums[label] || 0) + (r.q50_daily || 0);
+        }
+      });
+      const todayForecast = data.forecast.find(f => f.isToday);
+      if (todayForecast && newSums[todayForecast.date] !== undefined) {
+        newPredictedToday = Math.round(newSums[todayForecast.date]);
+      }
+      
+      const variables = [...(result.selectedWeather || []), ...(result.selectedEvents || [])];
+      if (result.customInput && result.customInput.trim().length > 0) {
+        const trunc = result.customInput.length > 20 ? result.customInput.substring(0, 20) + "..." : result.customInput;
+        variables.push(`"${trunc}"`);
+      }
+      
+      let isPast = true;
+      const updatedForecast = data.forecast.map(f => {
+        if (f.isToday) isPast = false;
+        
+        if (!isPast && newSums[f.date] !== undefined) {
+          return {
+            ...f,
+            predicted: Math.round(newSums[f.date])
+          };
+        }
+        return f;
+      });
+
+      const d = new Date()
+      const pad = (n: number) => String(n).padStart(2, "0")
+      const todayIsoStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+
+      setPredictionHistory(prev => {
+        const previousValue = prev.length > 0 ? prev[0].newValue : data.stats.predictedToday;
+        const diff = newPredictedToday - previousValue;
+        
+        const newHistory = [{
+          timestamp: new Date().toLocaleTimeString(),
+          date: todayIsoStr,
+          variables: variables.length > 0 ? variables.join(", ") : "선택 안함",
+          oldValue: previousValue,
+          newValue: newPredictedToday,
+          diff,
+          forecast: updatedForecast,
+          weather: result.selectedWeather || [],
+          events: result.selectedEvents || [],
+          customInput: result.customInput || ""
+        }, ...prev];
+        try {
+          localStorage.setItem("predictionHistory", JSON.stringify(newHistory));
+        } catch(e) {}
+        return newHistory;
+      });
+
+      // Show visual effect and toast
+      setIsApplyingEffect(true);
+      toast({
+        title: "✨ 예측값 적용 완료",
+        description: "AI 예측 결과가 대시보드에 반영되었습니다.",
+      });
+      setTimeout(() => setIsApplyingEffect(false), 2000);
+
+      // DB 업데이트된 최신 예측값을 화면에 다시 불러오기
+      mutate();
     }
   }
 
-  const displayData = useMemo(() => {
-    if (!data) return null;
-    if (!customPrediction || !customPrediction.results) return data;
-
-    const newForecast = [...data.forecast];
-    const results = customPrediction.results;
-    
-    // Sum q50_daily by date (M/D)
-    const newSums: Record<string, number> = {};
-    results.forEach((r: any) => {
-      const parts = r.date.split("-");
-      if (parts.length === 3) {
-        const label = `${parseInt(parts[1])}/${parseInt(parts[2])}`;
-        newSums[label] = (newSums[label] || 0) + (r.q50_daily || 0);
-      }
-    });
-
-    let newPredictedToday = data.stats.predictedToday;
-
-    newForecast.forEach((f, idx) => {
-      if (newSums[f.date] !== undefined) {
-        newForecast[idx] = { ...f, predicted: Math.round(newSums[f.date]) };
-        if (f.isToday) {
-          newPredictedToday = Math.round(newSums[f.date]);
-        }
-      }
-    });
-
-    return {
-      ...data,
-      stats: {
-        ...data.stats,
-        predictedToday: newPredictedToday,
-      },
-      forecast: newForecast,
-    };
-  }, [data, customPrediction]);
+  const displayData = data;
 
   useEffect(() => {
     if (showDashboard) {
@@ -164,32 +213,112 @@ export default function DashboardPage() {
   }, [showDashboard])
 
   useEffect(() => {
-    // 최초 1회만 실행하도록 세션 스토리지 확인
     const hasRun = sessionStorage.getItem("dashboardPredictionRun")
     if (hasRun) {
       setShowDashboard(true)
       return
     }
 
-    if (showDashboard) return
+    let active = true
+    const runInitialPrediction = async () => {
+      try {
+        const d = new Date()
+        const pad = (n: number) => String(n).padStart(2, "0")
+        const todayIso = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+        
+        const res = await fetch("/api/predict", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            date: todayIso,
+            weather: [],
+            events: [],
+            customInput: ""
+          }),
+        })
 
-    const handleProgress = (e: any) => {
-      const p = e.detail.progress;
-      setInitialProgress(p);
-      if (p >= 30) setInitialStatus((s) => ({ ...s, preprocessing: true }))
-      if (p >= 60) setInitialStatus((s) => ({ ...s, patternAnalysis: true }))
-      if (p >= 100) {
-        setInitialStatus((s) => ({ ...s, modelApplication: true }))
+        if (!res.ok) throw new Error("API Error")
+        if (!res.body) throw new Error("No response body")
+
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder("utf-8")
+        let buffer = ""
+
+        const updateProg = (p: number) => {
+          if (!active) return
+          setInitialProgress(p)
+          if (p >= 10) setInitialStatus((s) => ({ ...s, preprocessing: true }))
+          if (p >= 40) setInitialStatus((s) => ({ ...s, patternAnalysis: true }))
+          if (p >= 70) setInitialStatus((s) => ({ ...s, modelApplication: true }))
+        }
+
+        let visualProgress = 0
+        const visualInterval = setInterval(() => {
+          if (!active) {
+            clearInterval(visualInterval)
+            return
+          }
+          visualProgress += (99 - visualProgress) * 0.025
+          updateProg(Math.round(visualProgress))
+        }, 200)
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) {
+            clearInterval(visualInterval)
+            break
+          }
+
+          buffer += decoder.decode(value, { stream: true })
+          const parts = buffer.split("\n\n")
+          buffer = parts.pop() || ""
+
+          for (const part of parts) {
+            const line = part.trim()
+            if (line.startsWith("data: ")) {
+              try {
+                const data = JSON.parse(line.substring(6))
+                if (data.type === "progress") {
+                  if (data.percent > visualProgress) {
+                    visualProgress = data.percent
+                    updateProg(Math.round(visualProgress))
+                  }
+                } else if (data.type === "result") {
+                  clearInterval(visualInterval)
+                  setInitialProgress(100)
+                  setInitialStatus({
+                    preprocessing: true,
+                    patternAnalysis: true,
+                    modelApplication: true,
+                  })
+                  sessionStorage.setItem("dashboardPredictionRun", "true")
+                  mutate()
+                  setTimeout(() => {
+                    if (active) setShowDashboard(true)
+                  }, 600)
+                } else if (data.type === "error") {
+                  throw new Error(data.error_detail)
+                }
+              } catch (err) {
+                console.error("SSE parse error", err)
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Initial prediction failed, showing dashboard anyway", e)
         sessionStorage.setItem("dashboardPredictionRun", "true")
-        setTimeout(() => setShowDashboard(true), 600)
+        mutate()
+        setShowDashboard(true)
       }
-    };
+    }
 
-    window.addEventListener("api-progress", handleProgress);
+    runInitialPrediction()
+
     return () => {
-      window.removeEventListener("api-progress", handleProgress);
-    };
-  }, [showDashboard])
+      active = false
+    }
+  }, [mutate])
 
   const handleAutoRegion = () => {
     setIsAutoLoading(true)
@@ -354,8 +483,9 @@ export default function DashboardPage() {
                   stat.urgent && "border-destructive/50",
                   stat.warning && "border-orange-500/50",
                   mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4",
+                  isApplyingEffect && "border-green-500 bg-green-500/10 shadow-[0_0_15px_rgba(34,197,94,0.4)] scale-[1.03] transition-all duration-300 z-10"
                 )}
-                style={{ transitionDelay: `${200 + index * 150}ms` }}
+                style={{ transitionDelay: isApplyingEffect ? "0ms" : `${200 + index * 150}ms` }}
               >
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">{stat.title}</CardTitle>
@@ -393,8 +523,9 @@ export default function DashboardPage() {
         className={cn(
           "border card-hover transition-all duration-1000",
           mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4",
+          isApplyingEffect && "border-green-500 bg-green-500/10 shadow-[0_0_15px_rgba(34,197,94,0.4)] scale-[1.01] transition-all duration-300 z-10"
         )}
-        style={{ transitionDelay: "700ms" }}
+        style={{ transitionDelay: isApplyingEffect ? "0ms" : "700ms" }}
       >
         <CardHeader>
           <CardTitle>수요 예측</CardTitle>
@@ -441,7 +572,6 @@ export default function DashboardPage() {
                     stroke="var(--color-predicted)"
                     strokeWidth={2}
                     strokeDasharray="5 5"
-                    stackId="a"
                   />
                   <Area
                     dataKey="actual"
@@ -450,7 +580,6 @@ export default function DashboardPage() {
                     fillOpacity={0.4}
                     stroke="var(--color-actual)"
                     strokeWidth={2}
-                    stackId="b"
                     connectNulls={false}
                   />
                   <ChartLegend content={<ChartLegendContent />} />
@@ -492,6 +621,7 @@ export default function DashboardPage() {
                         alert.type === "urgent" && "bg-destructive/10 text-destructive",
                         alert.type === "warning" && "bg-orange-500/10 text-orange-500",
                         alert.type === "info" && "bg-blue-500/10 text-blue-500",
+                        alert.type === "success" && "bg-green-500/10 text-green-600 dark:text-green-400",
                       )}
                     >
                       <Icon className="h-4 w-4" />
@@ -499,12 +629,13 @@ export default function DashboardPage() {
                     <div className="flex-1 space-y-1">
                       <div className="flex items-center gap-2">
                         <Badge
-                          variant={alert.type === "urgent" ? "destructive" : "secondary"}
+                          variant={alert.type === "urgent" ? "destructive" : alert.type === "success" ? "outline" : "secondary"}
                           className={cn(
                             alert.type === "warning" && "bg-orange-500/10 text-orange-600 dark:text-orange-400",
+                            alert.type === "success" && "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
                           )}
                         >
-                          {alert.type === "urgent" ? "긴급" : alert.type === "warning" ? "주의" : "정보"}
+                          {alert.type === "urgent" ? "긴급" : alert.type === "warning" ? "주의" : alert.type === "success" ? "정상" : "정보"}
                         </Badge>
                         <span className="text-xs text-muted-foreground">{alert.time}</span>
                       </div>
@@ -533,10 +664,62 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
+        {predictionHistory.length > 0 && (
+          <Card
+            className={cn(
+              "border card-hover transition-all duration-1000",
+              mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4",
+            )}
+            style={{ transitionDelay: "1000ms" }}
+          >
+            <CardHeader>
+              <CardTitle>최근 AI 예측 기록</CardTitle>
+              <CardDescription>최근 실행된 수요 예측 결과 및 적용된 변수</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col gap-3">
+                {predictionHistory.map((history, idx) => (
+                  <div 
+                    key={idx} 
+                    className="flex justify-between items-center rounded-lg border p-3 hover:bg-muted/50 cursor-pointer transition-colors"
+                    onClick={() => {
+                      setSelectedHistoryItem(history)
+                      setIsDetailOpen(true)
+                    }}
+                  >
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-medium">실행 시간: {history.timestamp}</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">적용 변수: {history.variables}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-muted-foreground">오늘 예상 판매량</p>
+                      <div className="flex items-center gap-2 justify-end mt-1">
+                        <span className="text-sm line-through text-muted-foreground">{history.oldValue}잔</span>
+                        <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                        <span className="font-bold">{history.newValue}잔</span>
+                        <Badge variant={history.diff > 0 ? "default" : history.diff < 0 ? "destructive" : "secondary"} className="ml-1">
+                          {history.diff > 0 ? "+" : ""}{history.diff}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
       <AIPredictionModal 
         open={isPredictionOpen} 
         onOpenChange={setIsPredictionOpen} 
         onComplete={handlePredictionComplete}
+      />
+      <PredictionDetailModal
+        isOpen={isDetailOpen}
+        onOpenChange={setIsDetailOpen}
+        historyItem={selectedHistoryItem}
       />
       <DownloadReportModal open={isDownloadOpen} onOpenChange={setIsDownloadOpen} />
     </div>

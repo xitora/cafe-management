@@ -26,22 +26,20 @@ export async function GET(request: Request) {
   const yesterdayQty = sales.filter((s) => s.date === yesterdayISO).reduce((s, x) => s + x.quantity, 0)
   const last7Qty = sales.filter((s) => last7.has(s.date)).reduce((s, x) => s + x.quantity, 0)
   
-  // 실제 AI 예측 데이터를 백엔드에서 1번만 가져오기 (해당 API가 향후 7일치를 모두 반환함)
-  let predictionsData = (global as any).cachedPredictions;
-  if (!predictionsData) {
-    predictionsData = await fetchAIPredictions(todayISO);
-    if (predictionsData && predictionsData.status === "success") {
-      (global as any).cachedPredictions = predictionsData;
-    }
+  // DB에 저장된 실제 AI 예측 결과 가져오기
+  const { listPredictions } = await import("@/lib/db");
+  const allPredictions = await listPredictions();
+  
+  // AI가 여러 번 실행되어 DB에 같은 품목/날짜의 예측이 중복 저장되었을 경우를 대비해 가장 최근(마지막) 값으로 덮어씌워 중복 방지
+  const uniquePredictions = new Map<string, number>(); 
+  for (const p of allPredictions) {
+    uniquePredictions.set(`${p.date}_${p.product}`, p.predictedQty || 0);
   }
-  const predMap = new Map<string, number>();
 
-  if (predictionsData && predictionsData.status === "success" && predictionsData.results) {
-    for (const r of predictionsData.results) {
-      const d = r.date; // "YYYY-MM-DD"
-      const q50 = r.q50_daily || 0;
-      predMap.set(d, (predMap.get(d) || 0) + q50);
-    }
+  const predMap = new Map<string, number>();
+  for (const [key, q50] of uniquePredictions.entries()) {
+    const d = key.split("_")[0];
+    predMap.set(d, (predMap.get(d) || 0) + q50);
   }
 
   const predictedToday = Math.round(predMap.get(todayISO) || 0);
@@ -52,52 +50,55 @@ export async function GET(request: Request) {
   const lowStock = inventory.filter((i) => getStockStatus(i) === "low").length
   const expiringCount = expiring.length
 
-  // 10일 forecast (지난 7일 실제, 오늘부터 3일 예측 반영)
+  // 10일 forecast (지난 7일 실제, 오늘, 내일, 모레 예측 반영)
   const todayLabel = `${today.getMonth() + 1}/${today.getDate()}`
   let forecast: Array<{
     date: string
     actual: number | null
     predicted: number
     isToday: boolean
-  }> = (global as any).cachedForecast;
-  
-  if (!forecast) {
-    forecast = [];
-    // i = 7(7일 전)부터 i = -2(2일 후)까지 총 10일
-    for (let i = 7; i >= -2; i--) {
-      const dISO = daysAgo(i)
-      let day = sales.filter((s) => s.date === dISO).reduce((s, x) => s + x.quantity, 0)
-      const date = new Date(dISO)
-      const label = `${date.getMonth() + 1}/${date.getDate()}`
-      
-      // 사용자 요청: 과거 데이터(실제 판매량)가 AI 예측치와 비슷하게 보이도록 스케일링
-      if (predictedToday > 0 && i >= 0) {
-        const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-        const multiplier = isWeekend ? (1.05 + Math.random() * 0.15) : (0.9 + Math.random() * 0.2);
-        day = Math.round(predictedToday * multiplier);
-      }
+  }> = [];
 
-      let actualVal: number | null = day;
-      let predVal = day;
-
-      if (i > 0) {
-        // 과거 데이터는 약간의 오차 범위를 갖는 가짜 예측값 부여 (+/- 5%)
-        const variance = 1 + (Math.random() * 0.1 - 0.05);
-        predVal = day > 0 ? Math.round(day * variance) : 0;
-      } else if (i <= 0) {
-        // 오늘과 미래는 모델 API 결과 사용
-        predVal = Math.round(predMap.get(dISO) || 0);
-        if (i < 0) actualVal = null;
-      }
-
-      forecast.push({
-        date: label,
-        actual: actualVal,
-        predicted: predVal,
-        isToday: label === todayLabel,
-      })
+  // 날짜 기반 결정론적 난수 생성기 (0 ~ 1 사이 값 반환)
+  const getSeededRandom = (seedStr: string) => {
+    let hash = 0;
+    for (let i = 0; i < seedStr.length; i++) {
+      hash = Math.imul(31, hash) + seedStr.charCodeAt(i) | 0;
     }
-    (global as any).cachedForecast = forecast;
+    return (Math.abs(hash) % 10000) / 10000;
+  };
+
+  // i = 7(7일 전)부터 i = -2(모레)까지 총 10일
+  for (let i = 7; i >= -2; i--) {
+    const dISO = daysAgo(i)
+    let day = sales.filter((s) => s.date === dISO).reduce((s, x) => s + x.quantity, 0)
+    const date = new Date(dISO)
+    const label = `${date.getMonth() + 1}/${date.getDate()}`
+    
+    let actualVal: number | null = day;
+    let predVal = day;
+
+    if (i > 0) {
+      // 과거 데이터는 DB에 저장된 모델 예측 결과 사용, 없으면 약간의 오차 범위를 갖는 가짜 예측값 부여
+      const storedPred = predMap.get(dISO);
+      if (storedPred !== undefined && storedPred > 0) {
+        predVal = Math.round(storedPred);
+      } else {
+        const variance = 1 + (getSeededRandom(dISO + "_var") * 0.1 - 0.05);
+        predVal = day > 0 ? Math.round(day * variance) : 0;
+      }
+    } else if (i <= 0) {
+      // 오늘과 미래는 DB에 저장된 모델 예측 결과 사용 (없으면 0)
+      predVal = Math.round(predMap.get(dISO) || 0);
+      if (i < 0) actualVal = null;
+    }
+
+    forecast.push({
+      date: label,
+      actual: actualVal,
+      predicted: predVal,
+      isToday: label === todayLabel,
+    })
   }
 
 
@@ -172,17 +173,7 @@ export async function GET(request: Request) {
     console.error("Weather alert processing error", e);
   }
 
-  if (predictedToday > 500) {
-    alerts.push({
-      id: 2,
-      type: "info",
-      time: "오전 07:45",
-      title: "수요 급증 예상",
-      description: `금일 예측 수요(${predictedToday}잔)가 높아 바쁜 하루가 예상됩니다.`,
-      action: "인력 배치 확인",
-    });
-  }
-  
+  // "수요 급증 예상" 알림 제거됨
   if (weatherAlertDesc) {
     alerts.push({
       id: 3,

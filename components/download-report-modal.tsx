@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { Download, FileText, FileSpreadsheet, CheckCircle2 } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Download, FileText, FileSpreadsheet, CheckCircle2, Loader2 } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -13,6 +13,8 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
 import { DateRange } from "react-day-picker"
+import { addDays } from "date-fns"
+import { DateRangePicker } from "@/components/date-range-picker"
 
 interface DownloadReportModalProps {
   open: boolean
@@ -41,10 +43,21 @@ const reportTypes = [
   },
 ]
 
-export function DownloadReportModal({ open, onOpenChange, dateRange }: DownloadReportModalProps) {
+export function DownloadReportModal({ open, onOpenChange, dateRange: externalDateRange }: DownloadReportModalProps) {
   const [selectedReport, setSelectedReport] = useState<string>("daily")
   const [isDownloading, setIsDownloading] = useState(false)
   const [isComplete, setIsComplete] = useState(false)
+  const [loadingStep, setLoadingStep] = useState<string>("")
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(externalDateRange || {
+    from: new Date(2026, 4, 15),
+    to: addDays(new Date(2026, 4, 15), 10),
+  })
+
+  useEffect(() => {
+    if (externalDateRange) {
+      setDateRange(externalDateRange)
+    }
+  }, [externalDateRange])
 
   const handleDownload = async () => {
     setIsDownloading(true)
@@ -52,6 +65,15 @@ export function DownloadReportModal({ open, onOpenChange, dateRange }: DownloadR
       const params = new URLSearchParams()
       if (dateRange?.from) params.set("from", dateRange.from.toISOString())
       if (dateRange?.to) params.set("to", dateRange.to.toISOString())
+      
+      setLoadingStep("데이터 수집 중...")
+      await new Promise(resolve => setTimeout(resolve, 800))
+      
+      setLoadingStep("리포트 형태 생성 중...")
+      await new Promise(resolve => setTimeout(resolve, 800))
+      
+      setLoadingStep("CSV 파일 변환 중...")
+      await new Promise(resolve => setTimeout(resolve, 800))
       
       const res = await fetch(`/api/reports/download?${params.toString()}`)
       if (!res.ok) throw new Error("Failed to generate custom report")
@@ -70,6 +92,7 @@ export function DownloadReportModal({ open, onOpenChange, dateRange }: DownloadR
       setTimeout(() => {
         onOpenChange(false)
         setIsComplete(false)
+        setLoadingStep("")
       }, 1500)
     } catch (e) {
       console.error(e)
@@ -84,7 +107,7 @@ export function DownloadReportModal({ open, onOpenChange, dateRange }: DownloadR
         <DialogHeader className="animate-fade-in-up">
           <DialogTitle className="text-xl">리포트 다운로드</DialogTitle>
           <DialogDescription>
-            다운로드할 리포트 유형과 형식을 선택하세요
+            다운로드할 리포트의 기간을 선택하세요
           </DialogDescription>
         </DialogHeader>
 
@@ -98,11 +121,9 @@ export function DownloadReportModal({ open, onOpenChange, dateRange }: DownloadR
         ) : (
           <div className="flex flex-col gap-6 animate-fade-in-up">
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">선택된 기간</label>
-              <div className="rounded-lg border p-3 text-sm text-muted-foreground bg-muted/50">
-                {dateRange?.from && dateRange?.to ? 
-                  `${dateRange.from.toLocaleDateString()} ~ ${dateRange.to.toLocaleDateString()}` 
-                  : '기간이 설정되지 않았습니다 (기본값 사용)'}
+              <label className="text-sm font-medium">기간 설정</label>
+              <div className="w-full">
+                <DateRangePicker date={dateRange} setDate={setDateRange} />
               </div>
               <p className="text-xs text-muted-foreground mt-1">
                 * 위 기간 내의 매출, 재고, 폐기, 예측 데이터를 모두 새롭게 더미로 생성하여 다운로드합니다.
@@ -112,8 +133,8 @@ export function DownloadReportModal({ open, onOpenChange, dateRange }: DownloadR
             <Button onClick={handleDownload} disabled={isDownloading} className="w-full">
               {isDownloading ? (
                 <>
-                  <Download className="mr-2 h-4 w-4 animate-bounce" />
-                  다운로드 중...
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {loadingStep}
                 </>
               ) : (
                 <>

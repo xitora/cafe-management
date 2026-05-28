@@ -32,6 +32,7 @@ export function AIPredictionModal({ open, onOpenChange, onComplete }: AIPredicti
   const [progress, setProgress] = useState(0)
   const [selectedWeather, setSelectedWeather] = useState<string[]>([])
   const [selectedEvents, setSelectedEvents] = useState<string[]>([])
+  const [customInput, setCustomInput] = useState("")
   const [predictionResult, setPredictionResult] = useState<any>(null)
   const [isError, setIsError] = useState(false)
   const [analysisStatus, setAnalysisStatus] = useState({
@@ -41,6 +42,8 @@ export function AIPredictionModal({ open, onOpenChange, onComplete }: AIPredicti
   })
 
   const today = new Date()
+  const pad = (n: number) => String(n).padStart(2, "0")
+  const todayIso = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
   const formattedDate = `${today.getFullYear()}년 ${today.getMonth() + 1}월 ${today.getDate()}일`
 
   const toggleOption = (
@@ -80,14 +83,17 @@ export function AIPredictionModal({ open, onOpenChange, onComplete }: AIPredicti
     setIsError(false)
 
     try {
-      const todayIso = new Date().toISOString().split("T")[0]
+      const d = new Date()
+      const pad = (n: number) => String(n).padStart(2, "0")
+      const todayIso = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
       const res = await fetch("/api/predict", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           date: todayIso,
           weather: selectedWeather,
-          events: selectedEvents
+          events: selectedEvents,
+          customInput: customInput
         }),
       })
 
@@ -157,14 +163,17 @@ export function AIPredictionModal({ open, onOpenChange, onComplete }: AIPredicti
 
   const handleClose = () => {
     if (step === "complete" && predictionResult && onComplete) {
-      onComplete(predictionResult)
+      onComplete({ 
+        ...predictionResult, 
+        selectedWeather, 
+        selectedEvents,
+        customInput
+      })
     }
     onOpenChange(false)
     setTimeout(() => {
       setStep("input")
       setProgress(0)
-      setSelectedWeather([])
-      setSelectedEvents([])
       setPredictionResult(null)
       setIsError(false)
       setAnalysisStatus({
@@ -195,7 +204,7 @@ export function AIPredictionModal({ open, onOpenChange, onComplete }: AIPredicti
               if (w.pty_code === 2 || w.pty_code === 3) willSnow = true
             })
             
-            const autoSelected = []
+            const autoSelected: string[] = []
             if (willRain) autoSelected.push("비")
             if (willSnow) autoSelected.push("눈")
             
@@ -206,7 +215,7 @@ export function AIPredictionModal({ open, onOpenChange, onComplete }: AIPredicti
     }
   }, [open])
 
-  const hasInput = selectedWeather.length > 0 || selectedEvents.length > 0
+  const hasInput = selectedWeather.length > 0 || selectedEvents.length > 0 || customInput.trim().length > 0
   const canProceed = true
 
   return (
@@ -284,6 +293,17 @@ export function AIPredictionModal({ open, onOpenChange, onComplete }: AIPredicti
                     ))}
                   </div>
                 </div>
+
+                <div className="rounded-lg border p-4">
+                  <p className="mb-3 text-sm font-medium">직접 입력</p>
+                  <Textarea 
+                    placeholder="예: 근처 대학교에서 축제가 열립니다." 
+                    value={customInput}
+                    onChange={(e) => setCustomInput(e.target.value)}
+                    className="resize-none"
+                    rows={3}
+                  />
+                </div>
               </div>
 
               <Button onClick={handleNextStep} className="w-full" disabled={!canProceed}>
@@ -301,10 +321,9 @@ export function AIPredictionModal({ open, onOpenChange, onComplete }: AIPredicti
               </p>
               <div className="grid grid-cols-2 gap-4 mt-2">
                 <div>
-                  <p className="font-medium text-blue-600 dark:text-blue-400 mb-2 border-b pb-1">날씨 (수요 감소)</p>
+                  <p className="font-medium text-blue-600 dark:text-blue-400 mb-2 border-b pb-1">수요 감소 요인</p>
                   <ul className="space-y-1 text-xs">
                     <li className="flex justify-between"><span>우박:</span> <span className="text-destructive font-mono">-30%</span></li>
-                    <li className="flex justify-between"><span>폭염:</span> <span className="text-destructive font-mono">-20%</span></li>
                     <li className="flex justify-between"><span>눈:</span> <span className="text-destructive font-mono">-15%</span></li>
                     <li className="flex justify-between"><span>비:</span> <span className="text-destructive font-mono">-10%</span></li>
                     <li className="flex justify-between"><span>황사:</span> <span className="text-destructive font-mono">-10%</span></li>
@@ -312,10 +331,11 @@ export function AIPredictionModal({ open, onOpenChange, onComplete }: AIPredicti
                   </ul>
                 </div>
                 <div>
-                  <p className="font-medium text-green-600 dark:text-green-400 mb-2 border-b pb-1">행사 (수요 증가)</p>
+                  <p className="font-medium text-green-600 dark:text-green-400 mb-2 border-b pb-1">수요 증가 요인</p>
                   <ul className="space-y-1 text-xs">
                     <li className="flex justify-between"><span>지역 축제:</span> <span className="text-green-600 font-mono">+30%</span></li>
                     <li className="flex justify-between"><span>스포츠 경기:</span> <span className="text-green-600 font-mono">+25%</span></li>
+                    <li className="flex justify-between"><span>폭염:</span> <span className="text-green-600 font-mono">+20%</span></li>
                     <li className="flex justify-between"><span>콘서트:</span> <span className="text-green-600 font-mono">+20%</span></li>
                     <li className="flex justify-between"><span>전시회:</span> <span className="text-green-600 font-mono">+10%</span></li>
                   </ul>
@@ -345,6 +365,12 @@ export function AIPredictionModal({ open, onOpenChange, onComplete }: AIPredicti
                     <div className="flex flex-col gap-1 pl-2 mt-2">
                       <span className="text-muted-foreground">• 주변 행사:</span>
                       <span className="pl-2">{selectedEvents.join(", ")}</span>
+                    </div>
+                  )}
+                  {customInput.trim().length > 0 && (
+                    <div className="flex flex-col gap-1 pl-2 mt-2">
+                      <span className="text-muted-foreground">• 세부 상황 입력:</span>
+                      <span className="pl-2">{customInput}</span>
                     </div>
                   )}
                   {!hasInput && (
@@ -393,10 +419,12 @@ export function AIPredictionModal({ open, onOpenChange, onComplete }: AIPredicti
                   <p className="text-2xl font-bold">
                     {predictionResult?.results
                       ? Math.round(
-                          predictionResult.results.reduce(
-                            (acc: number, item: any) => acc + (item.q50_daily || 0),
-                            0
-                          )
+                          predictionResult.results
+                            .filter((item: any) => item.date >= todayIso)
+                            .reduce(
+                              (acc: number, item: any) => acc + (item.q50_daily || 0),
+                              0
+                            )
                         )
                       : 0}
                     잔

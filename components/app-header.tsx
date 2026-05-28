@@ -13,6 +13,7 @@ import {
   Menu,
   Droplets,
   X,
+  RefreshCw,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -60,6 +61,32 @@ function ThemeToggle() {
   )
 }
 
+function ResetButton() {
+  const handleReset = async () => {
+    try {
+      localStorage.removeItem("predictionHistory")
+      sessionStorage.removeItem("dashboardPredictionRun")
+      await fetch("/api/reset", { method: "POST" })
+      window.location.reload()
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={handleReset}
+      aria-label="초기화"
+      className="text-muted-foreground/20 hover:text-muted-foreground transition-colors"
+      title="시연 데이터 초기화"
+    >
+      <RefreshCw className="h-4 w-4" />
+    </Button>
+  )
+}
+
 export function AppHeader() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
@@ -100,6 +127,7 @@ export function AppHeader() {
         </nav>
 
         <div className="ml-auto flex items-center gap-1">
+          <ResetButton />
           <ThemeToggle />
 
           {/* Mobile menu */}

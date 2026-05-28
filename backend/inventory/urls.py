@@ -9,6 +9,7 @@ urlpatterns = [
     path('sales/', views.SalesHistoryListCreateAPI.as_view()),
     # 🌟 연결할 뷰 이름 변경!
     path('forecasts/', views.ForecastResultListAPI.as_view()), 
+    path('prediction-logs/', views.PredictionRunLogListAPI.as_view()),
     path('waste/', views.WasteHistoryListAPI.as_view()),
     path('orders/', views.OrderRecommendationListAPI.as_view()),
     path('weather/', views.get_weather, name='get_weather'),
@@ -19,4 +20,5 @@ urlpatterns = [
     # 진짜 AI 예측을 실행하는 입구
     path('forecasts/predict/', views.predict_future_sales, name='predict_sales'),
     
+    path('reset/', views.reset_demo, name='reset_demo'),
 ]
